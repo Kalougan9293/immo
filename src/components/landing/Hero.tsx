@@ -14,10 +14,14 @@ export function Hero() {
 
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
-    const supabase = createClient();
-    void supabase.auth.getUser().then(({ data }) => {
-      setIsLoggedIn(Boolean(data.user));
-    });
+    try {
+      const supabase = createClient();
+      void supabase.auth.getUser().then(({ data }) => {
+        setIsLoggedIn(Boolean(data.user));
+      });
+    } catch {
+      // Misconfigured env — keep guest UI
+    }
   }, []);
 
   return (

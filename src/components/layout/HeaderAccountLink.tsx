@@ -19,19 +19,23 @@ export function HeaderAccountLink({ onHero = false }: HeaderAccountLinkProps) {
 
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
-    const supabase = createClient();
-    void supabase.auth.getUser().then(({ data }) => {
-      const u = data.user;
-      if (!u) {
-        setUser(null);
-        return;
-      }
-      const name =
-        (u.user_metadata?.full_name as string | undefined)?.trim() ||
-        u.email?.split("@")[0] ||
-        t.common.account;
-      setUser({ name, email: u.email ?? "" });
-    });
+    try {
+      const supabase = createClient();
+      void supabase.auth.getUser().then(({ data }) => {
+        const u = data.user;
+        if (!u) {
+          setUser(null);
+          return;
+        }
+        const name =
+          (u.user_metadata?.full_name as string | undefined)?.trim() ||
+          u.email?.split("@")[0] ||
+          t.common.account;
+        setUser({ name, email: u.email ?? "" });
+      });
+    } catch {
+      // Misconfigured env — keep guest UI
+    }
   }, [t.common.account]);
 
   if (!user) {

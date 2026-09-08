@@ -45,9 +45,19 @@ export const TEMPLATES: Template[] = [
     badge: "TREND",
     preview:
       "linear-gradient(158deg, #141414 0%, #2a2624 40%, #4a4038 72%, #8a868033 100%)",
+    cover: "/templates/villa.jpg",
+    demo: "/templates/demos/villa-luxe.mp4",
+    accent: "#9a9088",
+  },
+  {
+    id: "hotel-boutique",
+    title: "Hôtel Boutique",
+    badge: "TREND",
+    preview:
+      "linear-gradient(158deg, #12161c 0%, #1e2834 40%, #3a4658 72%, #c4a57428 100%)",
     cover: "/templates/hotel.jpg",
     demo: "/templates/demos/hotel-boutique.mp4",
-    accent: "#9a9088",
+    accent: "#8a9aac",
   },
   {
     id: "salle-fitness",
