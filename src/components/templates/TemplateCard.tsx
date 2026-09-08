@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Check, Play } from "lucide-react";
 import type { Template } from "@/data/templates";
-import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
 type TemplateCardProps = {
@@ -53,7 +52,7 @@ export function TemplateCard({
         <button
           type="button"
           onClick={() => onPreview(template.id)}
-          aria-label={`Voir l’aperçu ${template.title}`}
+          aria-label="Voir l’aperçu du modèle"
           className="absolute inset-0 z-0 outline-none active:scale-[0.985]"
         >
           <span
@@ -85,30 +84,12 @@ export function TemplateCard({
               aria-hidden
             />
           ) : null}
-          <span className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
         </button>
-
-        <div className="pointer-events-none absolute top-2.5 left-2.5 z-10">
-          <Badge
-            tone="overlay"
-            className={
-              selected
-                ? "!border-gold/60 !bg-black/80 !text-[#f0e0c0] shadow-[0_2px_16px_rgba(196,165,116,0.35)]"
-                : undefined
-            }
-          >
-            {template.badge}
-          </Badge>
-        </div>
 
         <button
           type="button"
           onClick={() => onSelect(template.id)}
-          aria-label={
-            selected
-              ? `${template.title} sélectionné`
-              : `Sélectionner ${template.title}`
-          }
+          aria-label={selected ? "Modèle sélectionné" : "Sélectionner ce modèle"}
           aria-pressed={selected}
           className={cn(
             "absolute top-2.5 right-2.5 z-10 flex size-7 items-center justify-center rounded-full border transition-all duration-300",
@@ -127,12 +108,6 @@ export function TemplateCard({
             </span>
           </div>
         ) : null}
-
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-3">
-          <h3 className="font-display text-[1.05rem] leading-tight font-semibold tracking-wide text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_2px_12px_rgba(0,0,0,0.75)]">
-            {template.title}
-          </h3>
-        </div>
       </div>
 
       {selected ? (

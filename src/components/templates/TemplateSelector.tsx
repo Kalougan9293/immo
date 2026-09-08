@@ -18,11 +18,6 @@ export function TemplateSelector() {
     ? (TEMPLATES.find((x) => x.id === previewId) ?? null)
     : null;
 
-  const localized = TEMPLATES.map((template) => ({
-    ...template,
-    title: t.templates.names[template.id] ?? template.title,
-  }));
-
   const handleContinue = () => {
     if (!selected) return;
     router.push(`/creer/medias?template=${selected}`);
@@ -51,7 +46,7 @@ export function TemplateSelector() {
       </div>
 
       <div className="animate-fade-up animate-delay-1 mx-auto mt-6 grid w-full max-w-lg grid-cols-2 gap-3 px-5 pb-4 sm:mt-8 sm:max-w-2xl sm:gap-4 sm:px-8">
-        {localized.map((template) => (
+        {TEMPLATES.map((template) => (
           <TemplateCard
             key={template.id}
             template={template}
@@ -79,11 +74,7 @@ export function TemplateSelector() {
 
       {previewTemplate ? (
         <TemplatePreview
-          template={{
-            ...previewTemplate,
-            title:
-              t.templates.names[previewTemplate.id] ?? previewTemplate.title,
-          }}
+          template={previewTemplate}
           onClose={() => setPreviewId(null)}
           onUse={handleUse}
         />

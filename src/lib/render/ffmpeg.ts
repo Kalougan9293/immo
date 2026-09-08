@@ -128,6 +128,16 @@ function kenBurnsFilter(
       xExpr = `(iw-iw/zoom)*(1-on/${frames})`;
       yExpr = "ih/2-(ih/zoom/2)";
     }
+  } else if (motion === "sweep") {
+    // One-shot / avance rapide : zoom fixe élevé, pan latéral net (pas de push-in)
+    zExpr = String(Math.max(1.2, zMax));
+    if (alt === 0) {
+      xExpr = `(iw-iw/zoom)*on/${frames}`;
+      yExpr = `(ih-ih/zoom)*0.35`;
+    } else {
+      xExpr = `(iw-iw/zoom)*(1-on/${frames})`;
+      yExpr = `(ih-ih/zoom)*0.55`;
+    }
   } else {
     // drift — zoom + pan alternés doux
     const mode = direction % 4;
@@ -614,7 +624,9 @@ export async function buildSlideshowMp4(
   const clips: { path: string; duration: number }[] = [];
 
   try {
-    const limited = medias.slice(0, MAX_MEDIAS_PER_VIDEO);
+    const limited = (
+      base.singleShot ? medias.slice(0, 1) : medias
+    ).slice(0, MAX_MEDIAS_PER_VIDEO);
     const imagePaths = limited
       .filter((m) => m.kind !== "video")
       .map((m) => m.localPath);

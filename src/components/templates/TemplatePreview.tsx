@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import Image from "next/image";
 import { X } from "lucide-react";
 import type { Template } from "@/data/templates";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { useT } from "@/components/i18n/I18nProvider";
@@ -49,7 +48,7 @@ export function TemplatePreview({
       className="animate-fade-in fixed inset-0 z-50 flex items-end justify-center sm:items-center"
       role="dialog"
       aria-modal="true"
-      aria-label={`Aperçu ${template.title}`}
+      aria-label="Aperçu du modèle"
     >
       <button
         type="button"
@@ -65,13 +64,7 @@ export function TemplatePreview({
           "sm:mx-4 sm:max-h-[min(92dvh,880px)] sm:rounded-[1.75rem]",
         )}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-          <div className="min-w-0">
-            <Badge tone="gold">{template.badge}</Badge>
-            <h3 className="mt-1 truncate font-display text-xl font-semibold tracking-wide text-pearl">
-              {template.title}
-            </h3>
-          </div>
+        <div className="flex items-center justify-end border-b border-border px-4 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -100,7 +93,7 @@ export function TemplatePreview({
             <>
               <Image
                 src={template.cover}
-                alt={template.title}
+                alt=""
                 fill
                 className="object-cover"
                 sizes="400px"

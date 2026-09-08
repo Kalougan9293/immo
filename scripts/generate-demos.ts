@@ -81,12 +81,17 @@ async function main() {
 
   for (const job of jobs) {
     const dir = path.join(SOURCES, job.folder);
-    const images = await listImages(dir);
-    if (images.length < 3) {
+    const recipe = getRecipe(job.id);
+    let images = await listImages(dir);
+    if (recipe.singleShot) {
+      if (!images.length) {
+        throw new Error(`${job.id}: besoin d’au moins 1 image dans ${dir}`);
+      }
+      images = [images[0]];
+    } else if (images.length < 3) {
       throw new Error(`${job.id}: besoin d’au moins 3 images dans ${dir}`);
     }
 
-    const recipe = getRecipe(job.id);
     const textLayers = demoTextLayersForTemplate(
       job.id,
       recipe.imageSeconds,
@@ -94,7 +99,7 @@ async function main() {
     );
 
     console.log(
-      `→ ${job.id} (${images.length} photos, ${textLayers.length} textes)`,
+      `→ ${job.id} (${images.length} photos, ${textLayers.length} textes${recipe.singleShot ? ", single-shot" : ""})`,
     );
     console.time(job.id);
     const buf = await buildSlideshowMp4(

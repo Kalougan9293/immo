@@ -1,109 +1,106 @@
 import type { TemplateId } from "@/data/templates";
 
 /**
- * 6 signatures vraiment distinctes — rythme / zoom / transition / motion.
+ * 6 signatures distinctes — 1 police dominante par modèle.
  */
 export type MotionStyle =
-  | "punch" // zoom agressif, rapide
-  | "drift" // zoom + pan doux
-  | "crawl" // quasi immobile, très lent
-  | "slide" // pans latéraux dominants
-  | "pulse" // zoom in/out alterné marqué
-  | "glide" // zoom progressif fluide
-  | "rush"; // pan latéral dynamique + zoom léger (sport)
+  | "punch"
+  | "drift"
+  | "crawl"
+  | "slide"
+  | "pulse"
+  | "glide"
+  | "rush"
+  /** Zoom fixe + pan rapide (effet avance rapide / one-shot) */
+  | "sweep";
 
 export type RenderRecipe = {
   imageSeconds: number;
   videoMaxSeconds: number;
   fadeSeconds: number;
-  /** Zoom max (1.05 = subtil, 1.25 = fort) */
   kenBurnsZoom: number;
-  /**
-   * Vitesse du zoom : portion du plan pour atteindre le zoom max.
-   * 0.45 = rapide (atteint tôt), 1.0 = lent (sur toute la durée).
-   */
   zoomSpeed: number;
   motion: MotionStyle;
-  /** Transition xfade FFmpeg */
   transition: string;
   grade: { brightness: number; contrast: number; saturation: number };
   tripleStrip?: boolean;
   tripleStripSeconds?: number;
+  /** Démo / rendu : un seul média, plan long type time-lapse */
+  singleShot?: boolean;
 };
 
 export const RECIPES: Record<TemplateId, RenderRecipe> = {
-  // ——— Appartement : urbain, rythme posé — zoom jusqu’à la coupe ———
+  // ——— 1 Domino Paris — crawl doux, playfair ———
   "appartement-premium": {
-    imageSeconds: 2.75,
-    videoMaxSeconds: 3.8,
-    fadeSeconds: 0.32,
-    kenBurnsZoom: 1.14,
+    imageSeconds: 2.85,
+    videoMaxSeconds: 4.0,
+    fadeSeconds: 0.35,
+    kenBurnsZoom: 1.08,
     zoomSpeed: 1.0,
-    motion: "punch",
-    transition: "wipeleft",
-    grade: { brightness: 0.045, contrast: 1.08, saturation: 0.98 },
-    tripleStrip: true,
-    tripleStripSeconds: 3.2,
+    motion: "crawl",
+    transition: "fade",
+    grade: { brightness: 0.04, contrast: 1.05, saturation: 0.96 },
   },
 
-  // ——— Maison : visite chaleureuse, rythme médian, fade classique ———
+  // ——— 2 Dubai Marina — drift, script ———
   "maison-moderne": {
-    imageSeconds: 3.2,
-    videoMaxSeconds: 4.5,
-    fadeSeconds: 0.4,
-    kenBurnsZoom: 1.11,
+    imageSeconds: 2.7,
+    videoMaxSeconds: 4.0,
+    fadeSeconds: 0.28,
+    kenBurnsZoom: 1.1,
     zoomSpeed: 0.85,
     motion: "drift",
-    transition: "fade",
-    grade: { brightness: 0.035, contrast: 1.06, saturation: 1.1 },
-  },
-
-  // ——— Villa : Instagram luxe — plans courts, lumineux, push-in doux ———
-  "villa-luxe": {
-    imageSeconds: 2.15,
-    videoMaxSeconds: 3.3,
-    fadeSeconds: 0.16,
-    kenBurnsZoom: 1.13,
-    zoomSpeed: 0.68,
-    motion: "glide",
     transition: "dissolve",
-    grade: { brightness: 0.055, contrast: 1.09, saturation: 1.16 },
+    grade: { brightness: 0.055, contrast: 1.06, saturation: 1.06 },
   },
 
-  // ——— Hôtel : pans lents, intime, dissolve ———
-  "hotel-boutique": {
-    imageSeconds: 3.7,
-    videoMaxSeconds: 5.2,
-    fadeSeconds: 0.6,
-    kenBurnsZoom: 1.08,
-    zoomSpeed: 0.95,
-    motion: "slide",
-    transition: "smoothleft",
-    grade: { brightness: -0.02, contrast: 1.04, saturation: 1.0 },
-  },
-
-  // ——— Fitness : pans dynamiques, cuts nets, pas de pulse zoom nauséeux ———
-  "salle-fitness": {
-    imageSeconds: 1.85,
-    videoMaxSeconds: 2.6,
-    fadeSeconds: 0.1,
-    kenBurnsZoom: 1.1,
-    zoomSpeed: 1.0,
-    motion: "rush",
-    transition: "wipeleft",
-    grade: { brightness: 0.02, contrast: 1.18, saturation: 1.08 },
-  },
-
-  // ——— Restaurant : ambre, glide gourmand ———
-  "restaurant-chic": {
-    imageSeconds: 3.1,
-    videoMaxSeconds: 4.3,
-    fadeSeconds: 0.48,
-    kenBurnsZoom: 1.14,
+  // ——— 3 Cascade villa — glide ———
+  "villa-luxe": {
+    imageSeconds: 2.4,
+    videoMaxSeconds: 3.5,
+    fadeSeconds: 0.22,
+    kenBurnsZoom: 1.12,
     zoomSpeed: 0.75,
     motion: "glide",
-    transition: "diagtl",
-    grade: { brightness: -0.02, contrast: 1.1, saturation: 1.22 },
+    transition: "smoothleft",
+    grade: { brightness: 0.05, contrast: 1.09, saturation: 1.15 },
+  },
+
+  // ——— 4 One-shot avance rapide — sweep, pas de zoom punch ———
+  "hotel-boutique": {
+    imageSeconds: 11.5,
+    videoMaxSeconds: 11.5,
+    fadeSeconds: 0.05,
+    kenBurnsZoom: 1.38,
+    zoomSpeed: 1.0,
+    motion: "sweep",
+    transition: "fade",
+    grade: { brightness: 0.03, contrast: 1.1, saturation: 1.04 },
+    singleShot: true,
+  },
+
+  // ——— 5 Dynamique fitness — rush / anton ———
+  "salle-fitness": {
+    imageSeconds: 2.05,
+    videoMaxSeconds: 2.85,
+    fadeSeconds: 0.08,
+    kenBurnsZoom: 1.13,
+    zoomSpeed: 0.5,
+    motion: "rush",
+    transition: "wipeleft",
+    grade: { brightness: 0.025, contrast: 1.2, saturation: 1.1 },
+  },
+
+  // ——— 6 Brand invest — slide ———
+  "restaurant-chic": {
+    imageSeconds: 2.6,
+    videoMaxSeconds: 3.8,
+    fadeSeconds: 0.35,
+    kenBurnsZoom: 1.09,
+    zoomSpeed: 0.9,
+    motion: "slide",
+    transition: "fade",
+    grade: { brightness: 0.04, contrast: 1.06, saturation: 1.04 },
   },
 };
 

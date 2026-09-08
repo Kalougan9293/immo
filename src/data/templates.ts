@@ -22,7 +22,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "appartement-premium",
     title: "Appartement Premium",
-    badge: "DYNAMIC",
+    badge: "LUXE",
     preview:
       "linear-gradient(160deg, #1c1e24 0%, #2a2f3a 35%, #3d4554 70%, #c4a57433 100%)",
     cover: "/templates/appartement.jpg",
@@ -32,7 +32,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "maison-moderne",
     title: "Maison Moderne",
-    badge: "CLASSIC",
+    badge: "LOFT",
     preview:
       "linear-gradient(155deg, #181614 0%, #2c2620 40%, #4a3f32 75%, #c4a57444 100%)",
     cover: "/templates/maison.jpg",
@@ -42,7 +42,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "villa-luxe",
     title: "Villa de Luxe",
-    badge: "TREND",
+    badge: "ESTATE",
     preview:
       "linear-gradient(158deg, #141414 0%, #2a2624 40%, #4a4038 72%, #8a868033 100%)",
     cover: "/templates/villa.jpg",
@@ -52,7 +52,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "hotel-boutique",
     title: "Hôtel Boutique",
-    badge: "TREND",
+    badge: "HOOK",
     preview:
       "linear-gradient(158deg, #12161c 0%, #1e2834 40%, #3a4658 72%, #c4a57428 100%)",
     cover: "/templates/hotel.jpg",
@@ -72,7 +72,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "restaurant-chic",
     title: "Restaurant Chic",
-    badge: "CLASSIC",
+    badge: "BRAND",
     preview:
       "linear-gradient(152deg, #1a1210 0%, #2c1e1a 40%, #4a3028 72%, #c4a57433 100%)",
     cover: "/templates/restaurant.jpg",
@@ -80,6 +80,7 @@ export const TEMPLATES: Template[] = [
     accent: "#b89070",
   },
 ];
+
 
 export function getTemplateById(id: string): Template | undefined {
   return TEMPLATES.find((t) => t.id === id);
