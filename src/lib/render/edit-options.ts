@@ -46,6 +46,10 @@ export type TimelineTextLayer = {
   bgAlpha?: number;
   /** Animation entrée/sortie (fade = défaut, glow = halo, write = bientôt) */
   anim?: "fade" | "glow" | "write";
+  /** Typo cinéma luxe (majuscules + tracking) — preview + export */
+  look?: "cinema" | "cinema-meta";
+  /** Fondu entrée/sortie (s) — défaut TEXT_FADE_SECONDS */
+  fadeSec?: number;
   /** Icône optionnelle (ex. WhatsApp, pin lieu) */
   icon?: "whatsapp" | "pin";
 };
@@ -60,6 +64,10 @@ export const DEFAULT_TEXT_STROKE: TextStroke = "dark";
 
 /** Fondu entrée/sortie unique pour tous les textes (preview + export), ~discret */
 export const TEXT_FADE_SECONDS = 0.28;
+/** Fondu titres cinéma DYNAMIC */
+export const CINEMA_TITLE_FADE_SEC = 0.62;
+/** Fondu méta cinéma (specs / prix / CTA) */
+export const CINEMA_META_FADE_SEC = 0.48;
 
 export function clampTextScale(s: number): number {
   return (
@@ -71,13 +79,14 @@ export function clampTextScale(s: number): number {
 
 /** Opacité 0–1 selon le playhead (fondu uniforme entrée/sortie). */
 export function textLayerOpacity(
-  layer: Pick<TimelineTextLayer, "start" | "duration">,
+  layer: Pick<TimelineTextLayer, "start" | "duration" | "fadeSec">,
   currentTime: number,
 ): number {
   const start = layer.start;
   const end = start + Math.max(0.05, layer.duration);
   if (currentTime < start || currentTime >= end) return 0;
-  const fade = Math.min(TEXT_FADE_SECONDS, (end - start) / 2);
+  const fadeMax = layer.fadeSec ?? TEXT_FADE_SECONDS;
+  const fade = Math.min(fadeMax, (end - start) / 2);
   if (fade <= 0.001) return 1;
   const fadeIn = Math.min(1, (currentTime - start) / fade);
   const fadeOut = Math.min(1, (end - currentTime) / fade);
@@ -204,11 +213,12 @@ export const EDITOR_FONTS: EditorFont[] = [
     label: "Luxe",
     cssFamily: "var(--font-playfair), Georgia, serif",
     ffmpegPaths: [
-      "public/fonts/PlayfairDisplay-Variable.ttf",
-      "public/fonts/Georgia-Bold.ttf",
       "C:/Windows/Fonts/georgiab.ttf",
-      "/System/Library/Fonts/Supplemental/Georgia.ttf",
-      "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+      "public/fonts/Georgia-Bold.ttf",
+      "C:/Windows/Fonts/georgia.ttf",
+      "public/fonts/PlayfairDisplay-Variable.ttf",
+      "/System/Library/Fonts/Supplemental/Georgia Bold.ttf",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
     ],
     defaultColor: "#C4A574",
     stroke: "dark",
@@ -497,6 +507,9 @@ export type TextLayerEdit = {
   bg?: string | null;
   bgAlpha?: number;
   icon?: "whatsapp" | "pin";
+  /** Typo cinéma luxe */
+  look?: "cinema" | "cinema-meta";
+  fadeSec?: number;
 };
 
 export type RenderEditOptions = {
@@ -643,6 +656,12 @@ export function normalizeEditOptions(
               : 0;
         const icon =
           L.icon === "whatsapp" || L.icon === "pin" ? L.icon : undefined;
+        const look =
+          L.look === "cinema" || L.look === "cinema-meta" ? L.look : undefined;
+        const fadeSec =
+          typeof L.fadeSec === "number"
+            ? Math.min(1.4, Math.max(0.12, L.fadeSec))
+            : undefined;
         const row: TextLayerEdit = {
           content,
           fontId,
@@ -657,6 +676,8 @@ export function normalizeEditOptions(
           bgAlpha,
         };
         if (icon) row.icon = icon;
+        if (look) row.look = look;
+        if (fadeSec != null) row.fadeSec = fadeSec;
         return [row];
       })
     : undefined;

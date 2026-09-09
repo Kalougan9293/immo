@@ -24,19 +24,20 @@ export default async function MediasPage({ searchParams }: MediasPageProps) {
   }
 
   const isRedo = params.refaire === "1";
+  const isDynamic = template.category === "dynamic";
 
   return (
     <AppShell contained>
       <Header
         showBack
         backHref={isRedo ? "/compte" : "/creer"}
-        stepLabel="2 / 3"
+        stepLabel={isDynamic ? "2 / 4" : "2 / 3"}
       />
       <main className="flex flex-1 flex-col">
         <MediaUploader
           templateId={template.id}
-          templateTitle={template.title}
           restoreSession={isRedo}
+          flow={isDynamic ? "dynamic" : "classic"}
         />
       </main>
     </AppShell>

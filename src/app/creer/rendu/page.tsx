@@ -23,6 +23,11 @@ export default async function RenduPage({ searchParams }: RenduPageProps) {
     redirect("/creer");
   }
 
+  // DYNAMIC : édition textes / signature après génération cinéma
+  if (template.category === "dynamic") {
+    redirect(`/creer/infos?template=${template.id}`);
+  }
+
   return (
     <AppShell contained>
       <Header

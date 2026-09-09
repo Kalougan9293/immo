@@ -24,6 +24,14 @@ export type RenderSession = {
   templateId: string;
   signedUrl: string;
   storagePath: string;
+  /** Master DYNAMIC sans textes (pour re-éditer) */
+  masterStoragePath?: string | null;
+  masterSignedUrl?: string | null;
+  textLayers?: unknown[];
+  durationSec?: number | null;
+  /** Couverture (poster) — auto 1ʳᵉ photo, changeable */
+  coverUrl?: string | null;
+  coverPath?: string | null;
   saved: boolean;
   savedVideoId: string | null;
   evicted: number;

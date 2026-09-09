@@ -158,9 +158,20 @@ export async function GET(_request: Request, context: RouteContext) {
       });
     }
 
+    const coverPath = (video.cover_path as string | null) ?? null;
+    let coverUrl: string | null = null;
+    if (coverPath) {
+      const { data: coverSigned } = await supabase.storage
+        .from(AREO_MEDIA_BUCKET)
+        .createSignedUrl(coverPath, 60 * 60);
+      coverUrl = coverSigned?.signedUrl ?? null;
+    }
+
     return NextResponse.json({
       ok: true,
       templateId: video.template_id as string,
+      coverPath,
+      coverUrl,
       medias,
     });
   } catch (e) {

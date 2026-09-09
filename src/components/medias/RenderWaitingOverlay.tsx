@@ -1,15 +1,70 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type RenderWaitingOverlayProps = {
   previews: string[];
   status: string;
-  /** 0–100 */
+  /** 0–100 — cible ; l’affichage avance toujours en continu */
   progress: number;
 };
+
+/**
+ * Pourcentage lissé : ne bloque jamais sur un chiffre.
+ * - avance en continu vers un plafond ~93 % tant que le job tourne
+ * - rattrape vite vers 100 % quand le parent signale la fin
+ */
+function useSmoothProgress(target: number) {
+  const [shown, setShown] = useState(() =>
+    Math.min(8, Math.max(0, target || 4)),
+  );
+  const shownRef = useRef(shown);
+  const targetRef = useRef(target);
+  targetRef.current = Math.max(0, Math.min(100, target));
+
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+
+    const frame = (now: number) => {
+      const dt = Math.min(0.08, (now - last) / 1000);
+      last = now;
+      const t = targetRef.current;
+      let cur = shownRef.current;
+
+      if (t >= 99) {
+        cur += (100 - cur) * Math.min(1, dt * 7);
+        if (cur >= 99.4) cur = 100;
+      } else {
+        const softCap = 93;
+        const gap = Math.max(0, softCap - cur);
+        // Creep permanent (plus rapide au début, plus lent près du plafond)
+        const creepPerSec = 0.65 + gap * 0.018;
+        const creep = creepPerSec * dt;
+        // Rattrapage si le parent a avancé plus vite
+        const catchUp =
+          t > cur ? (t - cur) * Math.min(1, dt * 4) : 0;
+        cur = Math.min(softCap, cur + creep + catchUp);
+      }
+
+      if (Math.abs(cur - shownRef.current) > 0.05 || cur === 100) {
+        shownRef.current = cur;
+        setShown(cur);
+      } else {
+        shownRef.current = cur;
+      }
+
+      raf = requestAnimationFrame(frame);
+    };
+
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return shown;
+}
 
 export function RenderWaitingOverlay({
   previews,
@@ -18,7 +73,8 @@ export function RenderWaitingOverlay({
 }: RenderWaitingOverlayProps) {
   const [index, setIndex] = useState(0);
   const slides = previews.filter(Boolean);
-  const pct = Math.max(0, Math.min(100, Math.round(progress)));
+  const smooth = useSmoothProgress(progress);
+  const pct = Math.max(0, Math.min(100, Math.floor(smooth)));
 
   useEffect(() => {
     if (slides.length < 2) return;
@@ -74,8 +130,8 @@ export function RenderWaitingOverlay({
 
       <div className="mt-4 h-1 w-full max-w-[220px] overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full rounded-full bg-gold transition-[width] duration-300 ease-out"
-          style={{ width: `${pct}%` }}
+          className="h-full rounded-full bg-gold transition-[width] duration-150 ease-linear"
+          style={{ width: `${Math.min(100, smooth)}%` }}
         />
       </div>
     </div>

@@ -117,27 +117,38 @@ function textVisualStyle(layer: TimelineTextLayer): React.CSSProperties {
         ? "0 0 1px rgba(255,255,255,0.7), 0 2px 10px rgba(0,0,0,0.45)"
         : stroke === "gold"
           ? "0 0 1px rgba(196,165,116,0.85), 0 2px 10px rgba(0,0,0,0.5)"
-          : "0 1px 0 rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.55), 0 0 1px rgba(0,0,0,0.8)";
+          : layer.look === "cinema" || layer.look === "cinema-meta"
+            ? "0 2px 0 rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.55), 0 0 2px rgba(0,0,0,0.85)"
+            : "0 1px 0 rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.55), 0 0 1px rgba(0,0,0,0.8)";
 
   const isBanger = layer.fontId === "anton" || layer.fontId === "black";
   const isSoft =
     layer.fontId === "playfair" ||
     layer.fontId === "cinzel" ||
     layer.fontId === "script";
+  const isCinema =
+    layer.look === "cinema" || layer.look === "cinema-meta";
 
   return {
     fontFamily: getFont(layer.fontId).cssFamily,
-    fontSize: `${Math.round((isBanger ? 16.5 : 15.5) * scale)}px`,
+    fontSize: `${Math.round((isBanger ? 16.5 : isCinema ? 16.2 : 15.5) * scale)}px`,
     fontWeight: isBanger || layer.fontId === "modern" ? 900 : isSoft ? 500 : 600,
-    letterSpacing: isSoft
-      ? layer.fontId === "cinzel"
-        ? "0.22em"
-        : "0.08em"
-      : layer.fontId === "anton"
-        ? "0.02em"
-        : "0.03em",
-    textTransform: layer.fontId === "anton" ? ("uppercase" as const) : undefined,
-    lineHeight: isBanger ? 1.05 : 1.15,
+    letterSpacing: isCinema
+      ? layer.look === "cinema"
+        ? "0.32em"
+        : "0.18em"
+      : isSoft
+        ? layer.fontId === "cinzel"
+          ? "0.22em"
+          : "0.08em"
+        : layer.fontId === "anton"
+          ? "0.02em"
+          : "0.03em",
+    textTransform:
+      isCinema || layer.fontId === "anton"
+        ? ("uppercase" as const)
+        : undefined,
+    lineHeight: isBanger ? 1.05 : isCinema ? 1.2 : 1.15,
     color,
     textShadow: softShadow,
     backgroundColor:
@@ -249,6 +260,8 @@ function PreviewText({
     const startScale = layer.scale ?? DEFAULT_TEXT_SCALE;
     const box = boxRef.current.getBoundingClientRect();
     const startDiag = Math.hypot(box.width, box.height) || 80;
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
 
     const move = (ev: PointerEvent) => {
       // Distance depuis le centre du texte (approx via coin)
@@ -293,7 +306,7 @@ function PreviewText({
         className={cn(
           "relative text-center leading-snug",
           selected
-            ? "cursor-grab rounded-sm ring-1 ring-gold/85 active:cursor-grabbing"
+            ? "cursor-grab touch-none rounded-sm ring-1 ring-gold/85 active:cursor-grabbing"
             : "cursor-pointer",
           dragging && "cursor-grabbing",
         )}
@@ -363,10 +376,10 @@ function PreviewText({
               e.preventDefault();
               onDelete?.(layer.id);
             }}
-            className="absolute bottom-0 left-0 z-20 flex size-3.5 -translate-x-full translate-y-full items-center justify-center rounded-[2px] border border-gold/80 bg-background/90 text-pearl/90 hover:text-red-400"
+            className="absolute bottom-0 left-0 z-20 flex size-6 -translate-x-full translate-y-full touch-manipulation items-center justify-center rounded-[3px] border border-gold/80 bg-background/90 text-pearl/90 hover:text-red-400"
             aria-label="Supprimer le texte"
           >
-            <Trash2 className="size-2" strokeWidth={2.25} />
+            <Trash2 className="size-3" strokeWidth={2.25} />
           </button>
         ) : null}
 
@@ -374,9 +387,11 @@ function PreviewText({
           <span
             data-scale-handle
             onPointerDown={onScalePointerDown}
-            className="absolute -right-1 -bottom-1 z-20 size-2 cursor-nwse-resize rounded-[2px] border border-gold/80 bg-background/90"
+            className="absolute -right-2 -bottom-2 z-20 flex size-6 touch-none cursor-nwse-resize items-center justify-center"
             aria-label="Redimensionner"
-          />
+          >
+            <span className="pointer-events-none size-3 rounded-[2px] border border-gold/80 bg-background/90" />
+          </span>
         ) : null}
       </div>
     </div>

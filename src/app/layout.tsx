@@ -1,4 +1,5 @@
 ﻿import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import {
   Anton,
   Cinzel,
@@ -96,10 +97,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${outfit.variable} ${cormorant.variable} ${montserrat.variable} ${anton.variable} ${playfair.variable} ${lora.variable} ${cinzel.variable} ${greatVibes.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
       <body className="flex min-h-full flex-col bg-background font-sans text-foreground ambient-bg">
+        <Script
+          id="areo-theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
         <I18nProvider locale={locale} messages={messages}>
           {children}
         </I18nProvider>

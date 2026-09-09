@@ -21,8 +21,10 @@ import {
   AREO_MEDIA_BUCKET,
   loadRenderSession,
   loadUploadSession,
+  resolveUploadFolder,
   saveRenderSession,
   saveUploadSession,
+  uploadMediaFile,
   type RenderSession,
   type UploadedMedia,
 } from "@/lib/storage";
@@ -34,6 +36,7 @@ import {
   type TimelineClip,
   type TimelineTextLayer,
 } from "@/lib/render/edit-options";
+import { engineForTemplate } from "@/lib/render/engine";
 
 type RenduClientProps = {
   templateId: string;
@@ -76,6 +79,8 @@ function snapshotKey(
 
 export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const agentVideoRef = useRef<HTMLInputElement>(null);
+  const addAtRef = useRef<"start" | "end">("end");
   const recipe = getRecipe(templateId);
   const defaultTransition =
     EDIT_TRANSITIONS.find((t) => t.id === recipe.transition)?.id ?? "fade";
@@ -88,6 +93,7 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
   const [library, setLibrary] = useState<SourceImage[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
 
@@ -106,6 +112,8 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
     const hasResult = Boolean(loaded && loaded.templateId === templateId);
     if (hasResult && loaded) {
       setResult(loaded);
+      setCoverUrl(loaded.coverUrl ?? null);
+      setSelectedPath(loaded.coverPath ?? null);
     }
 
     const upload = loadUploadSession();
@@ -152,6 +160,80 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
 
     setReady(true);
   }, [templateId, recipe.imageSeconds, recipe.videoMaxSeconds, defaultTransition]);
+
+  // Recharge / auto-cover après export sauvegardé
+  useEffect(() => {
+    const videoId = result?.savedVideoId;
+    if (!videoId || coverUrl) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/videos/${videoId}`);
+        const data = (await res.json()) as {
+          coverUrl?: string | null;
+          coverPath?: string | null;
+          medias?: {
+            path: string;
+            kind: string;
+            previewUrl?: string | null;
+          }[];
+        };
+        if (!res.ok || cancelled) return;
+
+        if (data.coverUrl) {
+          setCoverUrl(data.coverUrl);
+          setSelectedPath(data.coverPath ?? null);
+          setResult((prev) => {
+            if (!prev || prev.savedVideoId !== videoId) return prev;
+            const next = {
+              ...prev,
+              coverUrl: data.coverUrl,
+              coverPath: data.coverPath ?? null,
+            };
+            saveRenderSession(next);
+            return next;
+          });
+          return;
+        }
+
+        const first = (data.medias ?? []).find(
+          (m) => m.kind === "image" && m.path,
+        );
+        if (!first) return;
+        const apply = await fetch(`/api/videos/${videoId}/cover`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sourcePath: first.path }),
+        });
+        const applied = (await apply.json()) as {
+          coverUrl?: string | null;
+          coverPath?: string | null;
+        };
+        if (!apply.ok || cancelled) return;
+        const nextUrl = applied.coverUrl ?? first.previewUrl ?? null;
+        const nextPath = applied.coverPath ?? first.path;
+        setCoverUrl(nextUrl);
+        setSelectedPath(nextPath);
+        setResult((prev) => {
+          if (!prev || prev.savedVideoId !== videoId) return prev;
+          const next = {
+            ...prev,
+            coverUrl: nextUrl,
+            coverPath: nextPath,
+          };
+          saveRenderSession(next);
+          return next;
+        });
+      } catch {
+        /* couverture optionnelle */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [result?.savedVideoId, coverUrl]);
 
   const canSetCover = Boolean(result?.saved && result.savedVideoId);
   const canEdit = clips.length > 0;
@@ -212,10 +294,20 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
       const data = (await res.json()) as {
         error?: string;
         coverUrl?: string | null;
+        coverPath?: string | null;
       };
       if (!res.ok) throw new Error(data.error || "Échec couverture.");
-      setSelectedPath(sourcePath);
+      setSelectedPath(data.coverPath ?? sourcePath);
       setCoverUrl(data.coverUrl ?? preview ?? null);
+      if (result) {
+        const next = {
+          ...result,
+          coverUrl: data.coverUrl ?? preview ?? null,
+          coverPath: data.coverPath ?? sourcePath,
+        };
+        setResult(next);
+        saveRenderSession(next);
+      }
       setPickerOpen(false);
     } catch (e) {
       setCoverError(e instanceof Error ? e.message : "Erreur couverture.");
@@ -238,10 +330,18 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
       const data = (await res.json()) as {
         error?: string;
         coverUrl?: string | null;
+        coverPath?: string | null;
       };
       if (!res.ok) throw new Error(data.error || "Échec couverture.");
-      setSelectedPath(null);
+      setSelectedPath(data.coverPath ?? null);
       setCoverUrl(data.coverUrl ?? URL.createObjectURL(file));
+      const next = {
+        ...result,
+        coverUrl: data.coverUrl ?? null,
+        coverPath: data.coverPath ?? null,
+      };
+      setResult(next);
+      saveRenderSession(next);
       setPickerOpen(false);
     } catch (e) {
       setCoverError(e instanceof Error ? e.message : "Erreur couverture.");
@@ -251,20 +351,85 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
     }
   };
 
+  const pickAgentVideo = (position: "start" | "end") => {
+    if (adding || exporting || busy) return;
+    addAtRef.current = position;
+    agentVideoRef.current?.click();
+  };
+
+  const addAgentVideo = async (file: File, position: "start" | "end") => {
+    setAdding(true);
+    setEditError(null);
+    try {
+      const folder = await resolveUploadFolder();
+      const uploaded = await uploadMediaFile(file, folder);
+      const supabase = createClient();
+      const { data } = await supabase.storage
+        .from(AREO_MEDIA_BUCKET)
+        .createSignedUrl(uploaded.path, 60 * 60);
+      const previewUrl = data?.signedUrl ?? URL.createObjectURL(file);
+      const agentDur = Math.min(4, recipe.videoMaxSeconds);
+      const nextClip: TimelineClip = {
+        id: newId("clip"),
+        path: uploaded.path,
+        name: position === "start" ? "Intro" : "Signature",
+        kind: "video",
+        size: file.size,
+        previewUrl,
+        duration: agentDur,
+        trimStart: 0,
+      };
+
+      setClips((prev) => {
+        const updated =
+          position === "start" ? [nextClip, ...prev] : [...prev, nextClip];
+        setTransitions(
+          Array.from(
+            { length: Math.max(0, updated.length - 1) },
+            () => defaultTransition,
+          ),
+        );
+        return updated;
+      });
+
+      if (position === "start") {
+        setTexts((prev) =>
+          prev.map((t) => ({
+            ...t,
+            start: t.start + agentDur,
+          })),
+        );
+      }
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : "Upload impossible.");
+    } finally {
+      setAdding(false);
+      if (agentVideoRef.current) agentVideoRef.current.value = "";
+    }
+  };
+
   const exportTimeline = async () => {
     if (!canEdit || exporting || !dirty) return;
     setExporting(true);
     setEditError(null);
-    setWaitStatus("Montage HD en cours…");
-    setWaitProgress(14);
+    const useVeo = engineForTemplate(templateId) === "veo-fast";
+    setWaitStatus(
+      useVeo
+        ? "Animation IA des pièces…"
+        : "Montage HD en cours…",
+    );
+    setWaitProgress(8);
 
     let tick: ReturnType<typeof setInterval> | null = setInterval(() => {
       setWaitProgress((p) => {
-        if (p >= 86) return p;
-        const room = 86 - p;
-        return Math.min(86, p + Math.max(0.2, room * 0.02) + Math.random() * 0.4);
+        if (p >= 88) return p;
+        const room = 88 - p;
+        const step = useVeo
+          ? Math.max(0.08, room * 0.008) + Math.random() * 0.15
+          : Math.max(0.2, room * 0.02) + Math.random() * 0.4;
+        return Math.min(88, p + step);
       });
-    }, 700);
+    }, useVeo ? 1200 : 700);
 
     try {
       const medias: UploadedMedia[] = clips.map((c) => ({
@@ -287,6 +452,7 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
         body: JSON.stringify({
           templateId,
           medias,
+          engine: engineForTemplate(templateId),
           edits: {
             clipDurations: clips.map((c) => c.duration),
             clipTrimStarts: clips.map((c) => c.trimStart ?? 0),
@@ -315,6 +481,8 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
         error?: string;
         signedUrl?: string;
         storagePath?: string;
+        coverUrl?: string | null;
+        coverPath?: string | null;
         saved?: boolean;
         savedVideoId?: string | null;
         evicted?: number;
@@ -323,6 +491,9 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
       if (!res.ok) {
         throw new Error(data.error || "Échec de l’export.");
       }
+
+      setWaitStatus("Assemblage du Reel…");
+      setWaitProgress(92);
 
       const signedUrl = data.signedUrl;
       const storagePath = data.storagePath;
@@ -340,6 +511,7 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
       }
       setWaitStatus("Presque prêt…");
       setWaitProgress(100);
+      await new Promise((r) => setTimeout(r, 550));
 
       const nextSession: RenderSession = {
         templateId,
@@ -350,12 +522,16 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
         evicted,
         mediaCount: medias.length,
         createdAt: new Date().toISOString(),
+        coverUrl: data.coverUrl ?? coverUrl,
+        coverPath: data.coverPath ?? selectedPath,
       };
       saveRenderSession(nextSession);
       setResult(nextSession);
       setExportedKey(snapshotKey(clips, transitions, texts));
-      setCoverUrl(null);
-      setSelectedPath(null);
+      if (data.coverUrl) {
+        setCoverUrl(data.coverUrl);
+        setSelectedPath(data.coverPath ?? null);
+      }
       setLibrary([]);
     } catch (e) {
       setEditError(e instanceof Error ? e.message : "Échec de l’export.");
@@ -434,15 +610,32 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
             texts={texts}
             onTextsChange={setTexts}
             defaultTransition={defaultTransition}
-            disabled={exporting || busy}
+            disabled={exporting || busy || adding}
             exporting={exporting}
             dirty={dirty}
             hasExport={hasExport}
             onExport={() => void exportTimeline()}
+            onAddBefore={() => pickAgentVideo("start")}
+            onAddAfter={() => pickAgentVideo("end")}
+            coverUrl={coverUrl}
+            onCoverPress={
+              canSetCover ? () => void openPicker() : undefined
+            }
+            coverBusy={busy}
           />
+          {adding ? (
+            <p className="mt-2 text-center text-[12px] text-muted">
+              Ajout de ta vidéo…
+            </p>
+          ) : null}
           {editError ? (
             <p className="mt-2 text-center text-[12px] text-red-400" role="alert">
               {editError}
+            </p>
+          ) : null}
+          {coverError && !pickerOpen ? (
+            <p className="mt-2 text-center text-[12px] text-red-400" role="alert">
+              {coverError}
             </p>
           ) : null}
         </>
@@ -451,48 +644,6 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
           Session médias absente — relancez depuis Médias pour éditer.
         </p>
       )}
-
-      {canSetCover ? (
-        <div className="mt-8 text-left">
-          <p className="text-[12px] font-medium tracking-wide text-pearl">
-            Couverture
-          </p>
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              type="button"
-              disabled={busy || exporting}
-              onClick={() => void openPicker()}
-              className={cn(
-                "relative size-16 shrink-0 overflow-hidden rounded-xl border transition-all",
-                coverUrl
-                  ? "border-gold/50"
-                  : "border-dashed border-border-strong hover:border-gold/40",
-              )}
-              aria-label="Choisir la couverture"
-            >
-              {coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="flex h-full items-center justify-center text-muted">
-                  <ImagePlus className="size-5" strokeWidth={1.5} />
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              disabled={busy || exporting}
-              onClick={() => void openPicker()}
-              className="text-left text-[13px] font-medium text-pearl"
-            >
-              {coverUrl ? "Changer" : "Choisir une image"}
-            </button>
-          </div>
-          {coverError && !pickerOpen ? (
-            <p className="mt-2 text-[12px] text-red-400">{coverError}</p>
-          ) : null}
-        </div>
-      ) : null}
 
       {result ? (
         <div className="mt-8 flex flex-col items-center gap-3">
@@ -538,6 +689,16 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
           if (file) void uploadCover(file);
         }}
       />
+      <input
+        ref={agentVideoRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void addAgentVideo(file, addAtRef.current);
+        }}
+      />
 
       {pickerOpen ? (
         <div
@@ -553,13 +714,18 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
           />
           <div className="relative z-10 flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[1.75rem] border border-border bg-surface sm:mx-4 sm:rounded-[1.75rem]">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h3 className="font-display text-lg font-semibold text-pearl">
-                Couverture
-              </h3>
+              <div>
+                <h3 className="font-display text-lg font-semibold text-pearl">
+                  Couverture
+                </h3>
+                <p className="text-[12px] text-muted">
+                  Auto = 1ʳᵉ photo. Change si tu n’aimes pas.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => !busy && setPickerOpen(false)}
-                className="flex size-9 items-center justify-center rounded-full border border-border"
+                className="flex size-11 touch-manipulation items-center justify-center rounded-full border border-border"
               >
                 <X className="size-4" />
               </button>

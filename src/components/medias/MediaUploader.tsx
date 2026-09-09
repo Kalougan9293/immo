@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Plus, Trash2, Film, FileImage } from "lucide-react";
+import { ImagePlus, Plus, Trash2, Film, FileImage, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import {
@@ -36,9 +36,10 @@ type MediaItem = {
 
 type MediaUploaderProps = {
   templateId: string;
-  templateTitle?: string;
   /** Recharge la session (flux Refaire) */
   restoreSession?: boolean;
+  /** classic → CapCut ; dynamic → infos → génération cinéma */
+  flow?: "classic" | "dynamic";
 };
 
 function detectKind(file: File): MediaItem["kind"] {
@@ -71,8 +72,8 @@ function detectKind(file: File): MediaItem["kind"] {
 
 export function MediaUploader({
   templateId,
-  templateTitle,
   restoreSession = false,
+  flow = "classic",
 }: MediaUploaderProps) {
   const t = useT();
   const router = useRouter();
@@ -153,6 +154,28 @@ export function MediaUploader({
     setError(null);
   };
 
+  const moveItem = (from: number, to: number) => {
+    if (working) return;
+    setItems((prev) => {
+      if (to < 0 || to >= prev.length || from === to) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
+  const onItemDragStart = (e: DragEvent, index: number) => {
+    e.dataTransfer.setData("text/plain", String(index));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const onItemDrop = (e: DragEvent, toIndex: number) => {
+    e.preventDefault();
+    const from = Number(e.dataTransfer.getData("text/plain"));
+    if (Number.isFinite(from)) moveItem(from, toIndex);
+  };
+
   const openPicker = () => {
     if (atLimit || working) return;
     inputRef.current?.click();
@@ -207,7 +230,7 @@ export function MediaUploader({
         throw new Error("Aucun média valide.");
       }
 
-      // Nouveau montage : éditeur d’abord, rendu seulement à l’export.
+  // DYNAMIC : infos bien → génération cinéma. CLASSIC : éditeur CapCut.
       clearRenderSession();
       saveUploadSession({
         templateId,
@@ -215,9 +238,17 @@ export function MediaUploader({
         createdAt: new Date().toISOString(),
       });
 
-      setWaitStatus(t.media.openingEditor);
-      setWaitProgress(100);
-      router.push(`/creer/rendu?template=${templateId}`);
+      if (flow === "dynamic") {
+        setWaitStatus("Ouverture des infos…");
+        setWaitProgress(100);
+        await new Promise((r) => setTimeout(r, 400));
+        router.push(`/creer/infos?template=${templateId}`);
+      } else {
+        setWaitStatus(t.media.openingEditor);
+        setWaitProgress(100);
+        await new Promise((r) => setTimeout(r, 400));
+        router.push(`/creer/rendu?template=${templateId}`);
+      }
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Échec de l’envoi.";
@@ -270,22 +301,7 @@ export function MediaUploader({
           {t.media.title}
         </h2>
         <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted">
-          {restoreSession ? (
-            <>{t.media.hint}</>
-          ) : (
-            <>
-              {templateTitle ? (
-                <>
-                  {t.media.model}{" "}
-                  <span className="text-pearl">
-                    {t.templates.names[templateId] ?? templateTitle}
-                  </span>
-                  {" · "}
-                </>
-              ) : null}
-              {t.media.hint}
-            </>
-          )}
+          {flow === "dynamic" ? t.media.hintDynamic : t.media.hint}
         </p>
       </div>
 
@@ -344,6 +360,12 @@ export function MediaUploader({
             <p className="mb-3 text-[12px] tracking-wide text-muted">
               {items.length}/{MAX_MEDIAS_PER_VIDEO} média
               {items.length > 1 ? "s" : ""}
+              {items.length > 1 ? (
+                <span className="text-muted-strong">
+                  {" "}
+                  · {t.media.reorder}
+                </span>
+              ) : null}
             </p>
             <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               <li>
@@ -375,21 +397,27 @@ export function MediaUploader({
               {items.map((item, index) => (
                 <li
                   key={item.id}
-                  className="group relative aspect-square overflow-hidden rounded-xl border border-border bg-surface"
+                  draggable={!working}
+                  onDragStart={(e) => onItemDragStart(e, index)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => onItemDrop(e, index)}
+                  className="group relative aspect-square cursor-grab overflow-hidden rounded-xl border border-border bg-surface active:cursor-grabbing"
                 >
                   {item.kind === "image" && item.previewUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={item.previewUrl}
                       alt=""
-                      className="h-full w-full object-cover"
+                      className="pointer-events-none h-full w-full object-cover"
+                      draggable={false}
                     />
                   ) : item.kind === "video" && item.previewUrl ? (
                     <video
                       src={item.previewUrl}
                       muted
                       playsInline
-                      className="h-full w-full object-cover"
+                      className="pointer-events-none h-full w-full object-cover"
+                      draggable={false}
                     />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted">
@@ -406,11 +434,31 @@ export function MediaUploader({
                   <span className="absolute bottom-1.5 left-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm">
                     {index + 1}
                   </span>
+                  <div className="absolute top-1.5 left-1.5 z-10 flex gap-0.5">
+                    <button
+                      type="button"
+                      disabled={working || index === 0}
+                      onClick={() => moveItem(index, index - 1)}
+                      className="flex size-8 touch-manipulation items-center justify-center rounded-full border border-white/15 bg-black/55 text-white disabled:opacity-30"
+                      aria-label={t.media.moveEarlier}
+                    >
+                      <ChevronLeft className="size-3.5" strokeWidth={2} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={working || index === items.length - 1}
+                      onClick={() => moveItem(index, index + 1)}
+                      className="flex size-8 touch-manipulation items-center justify-center rounded-full border border-white/15 bg-black/55 text-white disabled:opacity-30"
+                      aria-label={t.media.moveLater}
+                    >
+                      <ChevronRight className="size-3.5" strokeWidth={2} />
+                    </button>
+                  </div>
                   <button
                     type="button"
                     disabled={working}
                     onClick={() => removeItem(item.id)}
-                    className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white opacity-100 backdrop-blur-sm transition-opacity sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-40"
+                    className="absolute top-1.5 right-1.5 flex size-9 touch-manipulation items-center justify-center rounded-full border border-white/15 bg-black/55 text-white opacity-100 backdrop-blur-sm transition-opacity sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-40"
                     aria-label="Retirer"
                   >
                     <Trash2 className="size-3.5" strokeWidth={1.75} />
@@ -438,7 +486,7 @@ export function MediaUploader({
             showArrow={!working}
             onClick={handleContinue}
           >
-            {t.media.continueEdit}
+            {flow === "dynamic" ? "Continuer" : t.media.continueEdit}
           </Button>
         </div>
       </div>

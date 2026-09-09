@@ -55,13 +55,15 @@ export type Messages = {
     continue: string;
     useModel: string;
     previewSoon: string;
+    categoryDynamic: string;
+    categoryClassic: string;
     names: Record<string, string>;
   };
   media: {
     step: string;
     title: string;
     hint: string;
-    model: string;
+    hintDynamic: string;
     dropTitle: string;
     dropHint: string;
     browse: string;
@@ -70,6 +72,9 @@ export type Messages = {
     preparing: string;
     uploading: string;
     openingEditor: string;
+    reorder: string;
+    moveEarlier: string;
+    moveLater: string;
   };
   compte: {
     createVideo: string;
@@ -86,8 +91,8 @@ export type Messages = {
     upToDate: string;
     generate: string;
     exportEdit: string;
+    downloadReady: string;
     tooLong: string;
-    noSound: string;
     text: string;
     audio: string;
     style: string;
@@ -161,11 +166,18 @@ export const fr: Messages = {
     continue: "Continuer",
     useModel: "Utiliser ce modèle",
     previewSoon: "Aperçu bientôt — ce modèle utilise la même recette ARÉO.",
+    categoryDynamic: "DYNAMIC",
+    categoryClassic: "CLASSIC",
     names: {
+      "dynamic-reel": "Editorial Ciné",
+      "dynamic-pulse": "Pulse TikTok",
+      "dynamic-marina": "Marina Lifestyle",
+      "dynamic-noir": "Noir Prestige",
+      "dynamic-bold": "Bold Impact",
+      "dynamic-warm": "Ambre Soft",
       "appartement-premium": "Appartement Premium",
-      "maison-moderne": "Maison Moderne",
+      "paris-haussmann": "Paris Haussmann",
       "villa-luxe": "Villa de Luxe",
-      "hotel-boutique": "Hôtel Boutique",
       "salle-fitness": "Salle de Sport",
       "restaurant-chic": "Restaurant Chic",
     },
@@ -174,7 +186,8 @@ export const fr: Messages = {
     step: "Étape 2",
     title: "Médias",
     hint: "Ajoutez photos et vidéos de votre bien.",
-    model: "Modèle",
+    hintDynamic:
+      "Conseil : ordonnez extérieur → pièces → vue (glisser ou flèches).",
     dropTitle: "Déposez vos fichiers",
     dropHint: "Photos ou vidéos — jusqu’à 12",
     browse: "Parcourir",
@@ -183,6 +196,9 @@ export const fr: Messages = {
     preparing: "Préparation…",
     uploading: "Envoi des médias…",
     openingEditor: "Ouverture de l’éditeur…",
+    reorder: "Réordonner",
+    moveEarlier: "Monter",
+    moveLater: "Descendre",
   },
   compte: {
     createVideo: "Créer une vidéo",
@@ -199,8 +215,8 @@ export const fr: Messages = {
     upToDate: "À jour",
     generate: "Générer la vidéo",
     exportEdit: "Exporter le montage",
+    downloadReady: "Télécharger mon Reel",
     tooLong: "Trop long (60 s max)",
-    noSound: "sans son",
     text: "texte",
     audio: "audio",
     style: "Style",
@@ -274,11 +290,18 @@ export const en: Messages = {
     continue: "Continue",
     useModel: "Use this template",
     previewSoon: "Preview coming soon — same ARÉO recipe.",
+    categoryDynamic: "DYNAMIC",
+    categoryClassic: "CLASSIC",
     names: {
+      "dynamic-reel": "Editorial Ciné",
+      "dynamic-pulse": "Pulse TikTok",
+      "dynamic-marina": "Marina Lifestyle",
+      "dynamic-noir": "Noir Prestige",
+      "dynamic-bold": "Bold Impact",
+      "dynamic-warm": "Ambre Soft",
       "appartement-premium": "Premium Apartment",
-      "maison-moderne": "Modern House",
+      "paris-haussmann": "Paris Haussmann",
       "villa-luxe": "Luxury Villa",
-      "hotel-boutique": "Boutique Hotel",
       "salle-fitness": "Gym",
       "restaurant-chic": "Chic Restaurant",
     },
@@ -287,7 +310,8 @@ export const en: Messages = {
     step: "Step 2",
     title: "Media",
     hint: "Add photos and videos of your property.",
-    model: "Template",
+    hintDynamic:
+      "Tip: order exterior → rooms → view (drag or arrows).",
     dropTitle: "Drop your files",
     dropHint: "Photos or videos — up to 12",
     browse: "Browse",
@@ -296,6 +320,9 @@ export const en: Messages = {
     preparing: "Preparing…",
     uploading: "Uploading media…",
     openingEditor: "Opening editor…",
+    reorder: "Reorder",
+    moveEarlier: "Move up",
+    moveLater: "Move down",
   },
   compte: {
     createVideo: "Create a video",
@@ -312,8 +339,8 @@ export const en: Messages = {
     upToDate: "Up to date",
     generate: "Generate video",
     exportEdit: "Export edit",
+    downloadReady: "Download my Reel",
     tooLong: "Too long (60 s max)",
-    noSound: "no sound",
     text: "text",
     audio: "audio",
     style: "Style",

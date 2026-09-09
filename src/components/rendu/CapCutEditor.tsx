@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronUp,
+  ImagePlus,
   Pause,
   Play,
   Plus,
@@ -57,6 +58,8 @@ const TEXT_ROW_GAP = 0;
 const MIN_CLIP_PX = 36;
 const LONG_PRESS_MS = 280;
 const PAD = 8;
+/** Largeur des slots « + » intro / signature / couverture sur la piste vidéo */
+const END_CAP_W = 48;
 const MAX_TEXT_LANES = 6;
 
 /**
@@ -178,6 +181,15 @@ type CapCutEditorProps = {
   disabled?: boolean;
   exporting?: boolean;
   onExport: () => void;
+  /** Si fourni : bouton actif quand le montage est à jour (ex. aller au téléchargement). */
+  onContinue?: () => void;
+  /** Slots « + » avant / après la piste vidéo (intro / signature agent). */
+  onAddBefore?: () => void;
+  onAddAfter?: () => void;
+  /** Vignette couverture (poster) à gauche de la timeline. */
+  coverUrl?: string | null;
+  onCoverPress?: () => void;
+  coverBusy?: boolean;
   dirty: boolean;
   hasExport?: boolean;
 };
@@ -193,6 +205,12 @@ export function CapCutEditor({
   disabled,
   exporting,
   onExport,
+  onContinue,
+  onAddBefore,
+  onAddAfter,
+  coverUrl = null,
+  onCoverPress,
+  coverBusy = false,
   dirty,
   hasExport = false,
 }: CapCutEditorProps) {
@@ -320,6 +338,10 @@ export function CapCutEditor({
     }
   };
 
+  const coverPadX = onCoverPress ? END_CAP_W + 6 : 0;
+  const beforePadX = onAddBefore ? END_CAP_W + 6 : 0;
+  const trackOriginX = coverPadX + beforePadX;
+
   const seekFromClientX = useCallback(
     (clientX: number) => {
       const el = scrollerRef.current;
@@ -329,10 +351,10 @@ export function CapCutEditor({
       ) as HTMLElement | null;
       if (!track) return;
       const rect = track.getBoundingClientRect();
-      const x = clientX - rect.left + el.scrollLeft - PAD;
+      const x = clientX - rect.left + el.scrollLeft - PAD - trackOriginX;
       setCurrentTime(Math.max(0, Math.min(total, xToTime(x, pps))));
     },
-    [pps, total],
+    [pps, total, trackOriginX],
   );
 
   const moveClip = (from: number, to: number) => {
@@ -572,7 +594,8 @@ export function CapCutEditor({
       let nextDrop = fromIndex;
       if (el && track) {
         const rect = track.getBoundingClientRect();
-        const x = ev.clientX - rect.left + el.scrollLeft - PAD;
+        const x =
+          ev.clientX - rect.left + el.scrollLeft - PAD - trackOriginX;
         nextDrop = indexFromX(x, clips, pps);
         // Auto-scroll near edges
         if (ev.clientX > rect.right - 40) el.scrollLeft += 12;
@@ -603,7 +626,8 @@ export function CapCutEditor({
         ) as HTMLElement | null;
         if (el && track) {
           const rect = track.getBoundingClientRect();
-          const x = ev.clientX - rect.left + el.scrollLeft - PAD;
+          const x =
+            ev.clientX - rect.left + el.scrollLeft - PAD - trackOriginX;
           const to = indexFromX(x, clips, pps);
           const from = clips.findIndex((c) => c.id === clip.id);
           if (from >= 0) moveClip(from, to);
@@ -712,7 +736,13 @@ export function CapCutEditor({
       ) as HTMLElement | null;
       if (el && track) {
         const rect = track.getBoundingClientRect();
-        const x = ev.clientX - rect.left + el.scrollLeft - PAD - blockW / 2;
+        const x =
+          ev.clientX -
+          rect.left +
+          el.scrollLeft -
+          PAD -
+          trackOriginX -
+          blockW / 2;
         const t = Math.max(
           0,
           Math.min(Math.max(0, total - layer.duration), xToTime(x, pps)),
@@ -793,6 +823,8 @@ export function CapCutEditor({
     const startX = e.clientX;
     const startDur = layer.duration;
     const startStart = layer.start;
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
 
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - startX;
@@ -814,8 +846,10 @@ export function CapCutEditor({
     window.addEventListener("pointerup", onUp);
   };
 
+  const afterCapW = onAddAfter ? END_CAP_W + 6 : 0;
+  const clipOffsetX = trackOriginX;
   const timelineInner = Math.max(
-    timeToX(Math.max(total, 1), pps),
+    timeToX(Math.max(total, 1), pps) + clipOffsetX + afterCapW,
     (scrollerRef.current?.clientWidth ?? 280) - 16,
   );
   const timelineWidth = timelineInner + PAD * 2;
@@ -850,7 +884,10 @@ export function CapCutEditor({
     Math.max(0, textRowsVisual - 1) * TEXT_ROW_GAP;
   const audioRowTop = textTrackHeight;
   const tracksBelowVideoHeight = audioRowTop + TEXT_ROW_H;
-  const textTrackWidth = Math.max(timelineInner, addTextLeft + 72);
+  const textTrackWidth = Math.max(
+    timelineInner,
+    clipOffsetX + addTextLeft + 72,
+  );
 
   const ghostPortal =
     portalReady && ghost
@@ -940,7 +977,7 @@ export function CapCutEditor({
               transitionPreviewUntil.current = null;
               setPlaying((p) => !p);
             }}
-            className="flex size-8 items-center justify-center rounded-full border border-border bg-surface text-pearl"
+            className="flex size-11 items-center justify-center rounded-full border border-border bg-surface text-pearl touch-manipulation"
             aria-label={playing ? "Pause" : "Lecture"}
           >
             {playing ? (
@@ -952,12 +989,6 @@ export function CapCutEditor({
           <span className="min-w-[4.2rem] text-center text-[11px] tabular-nums text-muted">
             {formatTimecode(currentTime)} / {formatTimecode(total)}
           </span>
-          <span
-            className="rounded-md border border-border/60 bg-surface px-1.5 py-0.5 text-[9px] tracking-wide text-muted"
-            title="La vidéo exportée est sans piste son"
-          >
-            {t.editor.noSound}
-          </span>
           <button
             type="button"
             disabled={disabled || !canSplit}
@@ -968,7 +999,7 @@ export function CapCutEditor({
                 : "Placez la tête sur une vidéo pour couper"
             }
             className={cn(
-              "flex size-8 items-center justify-center rounded-full border",
+              "flex size-11 items-center justify-center rounded-full border touch-manipulation",
               canSplit
                 ? "border-border bg-surface text-pearl hover:border-gold/40"
                 : "border-border/50 text-muted/40",
@@ -983,7 +1014,7 @@ export function CapCutEditor({
             onClick={undo}
             title="Annuler"
             className={cn(
-              "flex size-8 items-center justify-center rounded-full border",
+              "flex size-11 items-center justify-center rounded-full border touch-manipulation",
               canUndo
                 ? "border-border bg-surface text-pearl hover:border-gold/40"
                 : "border-border/50 text-muted/40",
@@ -996,7 +1027,7 @@ export function CapCutEditor({
             type="button"
             disabled={disabled}
             onClick={() => setCompact((c) => !c)}
-            className="flex items-center gap-0.5 rounded-full border border-border px-2 py-1 text-[10px] text-muted-strong"
+            className="flex min-h-11 touch-manipulation items-center gap-0.5 rounded-full border border-border px-3 py-2 text-[10px] text-muted-strong"
           >
             {compact ? (
               <>
@@ -1044,7 +1075,7 @@ export function CapCutEditor({
             onPointerDown={(e) => {
               if (
                 (e.target as HTMLElement).closest(
-                  "[data-clip],[data-text],[data-gap],[data-scale-handle]",
+                  "[data-clip],[data-text],[data-gap],[data-scale-handle],[data-end-cap],[data-cover-slot]",
                 )
               )
                 return;
@@ -1065,8 +1096,13 @@ export function CapCutEditor({
               const onUp = (ev: PointerEvent) => {
                 window.removeEventListener("pointermove", onMove);
                 window.removeEventListener("pointerup", onUp);
-                // Clic simple = seek ; glisser = scroll la bande
-                if (!dragged) seekFromClientX(ev.clientX);
+                // Clic simple = seek + désélection ; glisser = scroll la bande
+                if (!dragged) {
+                  setSelectedClipId(null);
+                  setSelectedTextId(null);
+                  setGapIndex(null);
+                  seekFromClientX(ev.clientX);
+                }
               };
               window.addEventListener("pointermove", onMove);
               window.addEventListener("pointerup", onUp);
@@ -1080,21 +1116,78 @@ export function CapCutEditor({
                 <span
                   key={i}
                   className="absolute top-0 text-[9px] text-muted/70 tabular-nums"
-                  style={{ left: timeToX(i, pps) }}
+                  style={{ left: clipOffsetX + timeToX(i, pps) }}
                 >
                   {i}s
                 </span>
               ))}
             </div>
 
-            {/* Piste vidéo — clips collés */}
+            {/* Piste vidéo — clips collés + slots intro / signature */}
             <div
               className="relative"
               style={{ height: TRACK_H, width: timelineInner }}
             >
+              {onCoverPress ? (
+                <button
+                  type="button"
+                  data-cover-slot
+                  disabled={disabled || exporting || coverBusy}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCoverPress();
+                  }}
+                  className="absolute top-0 z-[5] flex touch-manipulation flex-col items-center justify-center overflow-hidden rounded-md border border-gold/50 bg-[#1a1a1c] transition-colors hover:border-gold disabled:opacity-40"
+                  style={{ left: 0, width: END_CAP_W, height: TRACK_H }}
+                  aria-label="Changer la couverture"
+                  title="Couverture — vignette du Reel"
+                >
+                  {coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={coverUrl}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ) : (
+                    <ImagePlus className="size-4 text-gold" strokeWidth={1.75} />
+                  )}
+                  <span className="absolute inset-x-0 bottom-0 bg-black/65 py-0.5 text-center text-[8px] font-medium tracking-wide text-pearl">
+                    Cover
+                  </span>
+                </button>
+              ) : null}
+
+              {onAddBefore ? (
+                <button
+                  type="button"
+                  data-end-cap="before"
+                  disabled={disabled || exporting}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddBefore();
+                  }}
+                  className="absolute top-0 z-[5] flex touch-manipulation flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-gold/45 bg-gold-soft/40 text-gold transition-colors hover:border-gold hover:bg-gold-soft disabled:opacity-40"
+                  style={{
+                    left: coverPadX,
+                    width: END_CAP_W,
+                    height: TRACK_H,
+                  }}
+                  aria-label="Ajouter une vidéo d’intro"
+                  title="Intro — avant le Reel"
+                >
+                  <Plus className="size-5" strokeWidth={2} />
+                  <span className="text-[9px] font-medium tracking-wide">
+                    Intro
+                  </span>
+                </button>
+              ) : null}
+
               {clips.map((clip, i) => {
                 const w = clipWidth(clip.duration, pps);
-                const left = timeToX(starts[i], pps);
+                const left = clipOffsetX + timeToX(starts[i], pps);
                 const selected = selectedClipId === clip.id;
                 const isGhostSource = draggingClipId === clip.id;
                 const showDropBefore =
@@ -1110,10 +1203,10 @@ export function CapCutEditor({
                     tabIndex={0}
                     onPointerDown={(e) => onClipPointerDown(e, clip, i)}
                     className={cn(
-                      "absolute top-0 overflow-hidden rounded-md border transition-opacity",
+                      "absolute top-0 touch-none rounded-md border transition-opacity",
                       selected
-                        ? "border-gold z-10 ring-1 ring-gold/40"
-                        : "border-white/10 z-[1]",
+                        ? "z-10 overflow-visible border-gold ring-1 ring-gold/40"
+                        : "z-[1] overflow-hidden border-white/10",
                       isGhostSource && "opacity-30",
                     )}
                     style={{ left, width: w, height: TRACK_H }}
@@ -1121,11 +1214,13 @@ export function CapCutEditor({
                     {showDropBefore ? (
                       <span className="absolute top-0 bottom-0 left-0 z-30 w-0.5 bg-gold" />
                     ) : null}
-                    <ClipFilmstrip clip={clip} width={w} height={TRACK_H} />
-                    <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                    <span className="pointer-events-none absolute right-1 bottom-0.5 text-[9px] tabular-nums text-white/95 drop-shadow">
-                      {clip.duration.toFixed(1)}s
-                    </span>
+                    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[5px]">
+                      <ClipFilmstrip clip={clip} width={w} height={TRACK_H} />
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                      <span className="absolute right-1 bottom-0.5 text-[9px] tabular-nums text-white/95 drop-shadow">
+                        {clip.duration.toFixed(1)}s
+                      </span>
+                    </div>
                     {selected && clips.length > 1 ? (
                       <button
                         type="button"
@@ -1136,33 +1231,69 @@ export function CapCutEditor({
                           e.preventDefault();
                           removeClip(clip.id);
                         }}
-                        className="absolute top-1/2 left-1/2 z-20 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/75 backdrop-blur-[1px] hover:bg-black/55 hover:text-red-300 disabled:opacity-40"
+                        className="absolute top-1/2 left-1/2 z-20 flex size-9 -translate-x-1/2 -translate-y-1/2 touch-manipulation items-center justify-center rounded-full bg-black/40 text-white/75 backdrop-blur-[1px] hover:bg-black/55 hover:text-red-300 disabled:opacity-40"
                         aria-label="Supprimer le clip"
                       >
                         <Trash2 className="size-3.5" strokeWidth={1.75} />
                       </button>
                     ) : null}
-                    <span
-                      data-trim="left"
-                      onPointerDown={(e) =>
-                        onTrimPointerDown(e, clip.id, "left")
-                      }
-                      className="absolute top-0 bottom-0 left-0 z-10 w-2.5 cursor-ew-resize hover:bg-gold/50"
-                    />
-                    <span
-                      data-trim="right"
-                      onPointerDown={(e) =>
-                        onTrimPointerDown(e, clip.id, "right")
-                      }
-                      className="absolute top-0 right-0 bottom-0 z-10 w-2.5 cursor-ew-resize hover:bg-gold/50"
-                    />
+                    {selected ? (
+                      <>
+                        <span
+                          data-trim="left"
+                          onPointerDown={(e) =>
+                            onTrimPointerDown(e, clip.id, "left")
+                          }
+                          className="absolute top-1/2 left-0 z-30 flex h-[calc(100%+14px)] w-10 -translate-x-1/2 -translate-y-1/2 touch-none cursor-ew-resize items-center justify-center"
+                          aria-label="Raccourcir le début"
+                        >
+                          <span className="pointer-events-none h-[85%] w-1.5 rounded-full bg-gold shadow-[0_0_0_1px_rgba(0,0,0,0.4)]" />
+                        </span>
+                        <span
+                          data-trim="right"
+                          onPointerDown={(e) =>
+                            onTrimPointerDown(e, clip.id, "right")
+                          }
+                          className="absolute top-1/2 right-0 z-30 flex h-[calc(100%+14px)] w-10 translate-x-1/2 -translate-y-1/2 touch-none cursor-ew-resize items-center justify-center"
+                          aria-label="Allonger la fin"
+                        >
+                          <span className="pointer-events-none h-[85%] w-1.5 rounded-full bg-gold shadow-[0_0_0_1px_rgba(0,0,0,0.4)]" />
+                        </span>
+                      </>
+                    ) : null}
                   </div>
                 );
               })}
 
+              {onAddAfter ? (
+                <button
+                  type="button"
+                  data-end-cap="after"
+                  disabled={disabled || exporting}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddAfter();
+                  }}
+                  className="absolute top-0 z-[5] flex touch-manipulation flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-gold/45 bg-gold-soft/40 text-gold transition-colors hover:border-gold hover:bg-gold-soft disabled:opacity-40"
+                  style={{
+                    left: clipOffsetX + timeToX(Math.max(total, 0.1), pps) + 6,
+                    width: END_CAP_W,
+                    height: TRACK_H,
+                  }}
+                  aria-label="Ajouter une vidéo de signature"
+                  title="Signature — après le Reel"
+                >
+                  <Plus className="size-5" strokeWidth={2} />
+                  <span className="text-[9px] font-medium tracking-wide">
+                    Fin
+                  </span>
+                </button>
+              ) : null}
+
               {/* Transitions sur les jointures */}
               {clips.slice(0, -1).map((_, i) => {
-                const seamX = timeToX(starts[i + 1], pps);
+                const seamX = clipOffsetX + timeToX(starts[i + 1], pps);
                 const active = gapIndex === i;
                 return (
                   <button
@@ -1184,7 +1315,7 @@ export function CapCutEditor({
                       }
                     }}
                     className={cn(
-                      "absolute top-1/2 z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-[8px] shadow",
+                      "absolute top-1/2 z-20 flex size-10 -translate-x-1/2 -translate-y-1/2 touch-manipulation items-center justify-center rounded-full border text-[9px] shadow",
                       active
                         ? "border-gold bg-gold text-background"
                         : "border-white/25 bg-[#1a1a1c] text-pearl hover:border-gold/60",
@@ -1199,7 +1330,7 @@ export function CapCutEditor({
 
               <div
                 className="pointer-events-none absolute top-[-6px] bottom-[-6px] z-30 w-px bg-gold"
-                style={{ left: timeToX(currentTime, pps) }}
+                style={{ left: clipOffsetX + timeToX(currentTime, pps) }}
               >
                 <span className="absolute -top-1 left-1/2 size-2 -translate-x-1/2 rounded-full bg-gold" />
               </div>
@@ -1215,7 +1346,7 @@ export function CapCutEditor({
               }}
             >
               {texts.map((layer) => {
-                const left = timeToX(layer.start, pps);
+                const left = clipOffsetX + timeToX(layer.start, pps);
                 const w = Math.max(36, timeToX(layer.duration, pps));
                 const lane = textLanes.get(layer.id) ?? layer.lane ?? 0;
                 const top = lane * (TEXT_ROW_H + TEXT_ROW_GAP);
@@ -1228,10 +1359,10 @@ export function CapCutEditor({
                     tabIndex={0}
                     onPointerDown={(e) => onTextBlockPointerDown(e, layer)}
                     className={cn(
-                      "absolute flex items-center overflow-hidden rounded-md border px-2 text-[11px] text-pearl",
+                      "absolute flex items-center rounded-md border px-2 text-[11px] text-pearl",
                       selectedTextId === layer.id
-                        ? "border-gold bg-gold-soft z-10"
-                        : "border-white/20 bg-white/10 z-[1]",
+                        ? "z-10 overflow-visible border-gold bg-gold-soft"
+                        : "z-[1] overflow-hidden border-white/20 bg-white/10",
                       isDragging && "opacity-40 z-20",
                       !isDragging && "transition-[top,left] duration-150 ease-out",
                     )}
@@ -1245,20 +1376,30 @@ export function CapCutEditor({
                     <span className="truncate pointer-events-none">
                       {layer.content || "Texte…"}
                     </span>
-                    <span
-                      data-trim="left"
-                      onPointerDown={(e) =>
-                        onTextTrimPointerDown(e, layer.id, "left")
-                      }
-                      className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize hover:bg-gold/40"
-                    />
-                    <span
-                      data-trim="right"
-                      onPointerDown={(e) =>
-                        onTextTrimPointerDown(e, layer.id, "right")
-                      }
-                      className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-gold/40"
-                    />
+                    {selectedTextId === layer.id ? (
+                      <>
+                        <span
+                          data-trim="left"
+                          onPointerDown={(e) =>
+                            onTextTrimPointerDown(e, layer.id, "left")
+                          }
+                          className="absolute top-1/2 left-0 z-30 flex h-[calc(100%+14px)] w-10 -translate-x-1/2 -translate-y-1/2 touch-none cursor-ew-resize items-center justify-center"
+                          aria-label="Raccourcir le début du texte"
+                        >
+                          <span className="pointer-events-none h-[80%] w-1.5 rounded-full bg-gold shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
+                        </span>
+                        <span
+                          data-trim="right"
+                          onPointerDown={(e) =>
+                            onTextTrimPointerDown(e, layer.id, "right")
+                          }
+                          className="absolute top-1/2 right-0 z-30 flex h-[calc(100%+14px)] w-10 translate-x-1/2 -translate-y-1/2 touch-none cursor-ew-resize items-center justify-center"
+                          aria-label="Allonger la fin du texte"
+                        >
+                          <span className="pointer-events-none h-[80%] w-1.5 rounded-full bg-gold shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
+                        </span>
+                      </>
+                    ) : null}
                   </div>
                 );
               })}
@@ -1269,7 +1410,7 @@ export function CapCutEditor({
                 onClick={addText}
                 className="absolute inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2 text-[10px] font-medium text-muted-strong hover:border-gold/40 hover:text-pearl"
                 style={{
-                  left: addTextLeft,
+                  left: clipOffsetX + addTextLeft,
                   top: 0,
                   height: TEXT_ROW_H,
                 }}
@@ -1372,7 +1513,7 @@ export function CapCutEditor({
                   Style
                 </span>
                 <span className="block truncate text-[10px] text-muted">
-                  Police · couleur
+                  Police · taille · couleur
                 </span>
               </span>
               {styleOpen ? (
@@ -1440,6 +1581,47 @@ export function CapCutEditor({
                 })}
               </div>
 
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    pushHistory();
+                    updateText(selectedText.id, {
+                      scale: clampTextScale(
+                        (selectedText.scale ?? DEFAULT_TEXT_SCALE) - 0.1,
+                      ),
+                    });
+                  }}
+                  className="flex h-10 min-w-12 items-center justify-center rounded-lg border border-border bg-surface text-[13px] font-semibold text-pearl hover:border-gold/40 disabled:opacity-40"
+                  aria-label="Réduire la police"
+                >
+                  A−
+                </button>
+                <span className="min-w-12 text-center text-[12px] tabular-nums text-muted-strong">
+                  {Math.round(
+                    (selectedText.scale ?? DEFAULT_TEXT_SCALE) * 100,
+                  )}
+                  %
+                </span>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    pushHistory();
+                    updateText(selectedText.id, {
+                      scale: clampTextScale(
+                        (selectedText.scale ?? DEFAULT_TEXT_SCALE) + 0.1,
+                      ),
+                    });
+                  }}
+                  className="flex h-10 min-w-12 items-center justify-center rounded-lg border border-border bg-surface text-[15px] font-semibold text-pearl hover:border-gold/40 disabled:opacity-40"
+                  aria-label="Agrandir la police"
+                >
+                  A+
+                </button>
+              </div>
+
               <div className="flex flex-wrap justify-center gap-1.5">
                 {colorsForFont(selectedText.fontId).map((c) => {
                   const active =
@@ -1460,7 +1642,7 @@ export function CapCutEditor({
                         });
                       }}
                       className={cn(
-                        "size-5 shrink-0 rounded-full border",
+                        "size-9 shrink-0 rounded-full border touch-manipulation",
                         active
                           ? "border-gold ring-2 ring-gold/35"
                           : "border-white/20",
@@ -1479,9 +1661,21 @@ export function CapCutEditor({
       <div className="mt-4">
         <Button
           fullWidth
-          variant={dirty && !overLimit ? "gold" : "ghost"}
-          disabled={!dirty || disabled || exporting || overLimit}
-          onClick={onExport}
+          variant={
+            (dirty || Boolean(onContinue && hasExport)) && !overLimit
+              ? "gold"
+              : "ghost"
+          }
+          disabled={
+            disabled ||
+            exporting ||
+            overLimit ||
+            (!dirty && !(onContinue && hasExport))
+          }
+          onClick={() => {
+            if (dirty) onExport();
+            else onContinue?.();
+          }}
         >
           {exporting
             ? t.editor.exporting
@@ -1491,7 +1685,9 @@ export function CapCutEditor({
                 ? hasExport
                   ? t.editor.exportEdit
                   : t.editor.generate
-                : t.editor.upToDate}
+                : onContinue && hasExport
+                  ? t.editor.downloadReady
+                  : t.editor.upToDate}
         </Button>
       </div>
     </div>

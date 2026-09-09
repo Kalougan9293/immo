@@ -1,7 +1,7 @@
 /**
- * Génère les aperçus des 6 modèles avec le moteur ARÉO.
+ * Génère les aperçus des modèles CLASSIC avec le moteur ARÉO.
  * Usage: npm run demos
- *        npx tsx scripts/generate-demos.ts appartement-premium maison-moderne
+ *        npx tsx scripts/generate-demos.ts appartement-premium paris-haussmann
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -28,22 +28,16 @@ const JOBS: {
     cover: "appartement.jpg",
   },
   {
-    id: "maison-moderne",
-    folder: "maison",
-    file: "maison-moderne.mp4",
-    cover: "maison.jpg",
+    id: "paris-haussmann",
+    folder: "paris",
+    file: "paris-haussmann.mp4",
+    cover: "paris.jpg",
   },
   {
     id: "villa-luxe",
     folder: "villa",
     file: "villa-luxe.mp4",
     cover: "villa.jpg",
-  },
-  {
-    id: "hotel-boutique",
-    folder: "hotel",
-    file: "hotel-boutique.mp4",
-    cover: "hotel.jpg",
   },
   {
     id: "salle-fitness",

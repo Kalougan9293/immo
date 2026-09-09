@@ -16,6 +16,25 @@ import {
 } from "./edit-options";
 import { getRecipe, type RenderRecipe } from "./recipes";
 import { MAX_MEDIAS_PER_VIDEO } from "@/lib/media-limits";
+import {
+  downloadVeoVideoToFile,
+  generateVeoClipFromImage,
+  VEO_CLIP_SECONDS,
+} from "@/lib/ai/veo";
+import { uploadLocalImageToFal } from "@/lib/ai/fal";
+import {
+  buildCinemaTextLayers,
+  cinemaMotionPrompt,
+  cinemaNegative,
+  cinemaTransitions,
+  getCinemaStyle,
+  applyCinemaTracking,
+} from "@/lib/dynamic/cinema";
+import {
+  normalizeProperty,
+  propertyHasContent,
+  type PropertyListing,
+} from "@/lib/dynamic/property";
 
 const WIDTH = 1080;
 const HEIGHT = 1920;
@@ -288,14 +307,23 @@ function resolveDrawtextFont(fontId = "sans"): string | null {
   return null;
 }
 
-/** Échappe le texte pour le filtre drawtext FFmpeg. */
-function escapeDrawtext(text: string): string {
+/** Normalise le texte affiché (fichiers textfile drawtext). */
+function normalizeOverlayText(text: string): string {
   return text
+    .replace(/[\u2018\u2019\u02BC']/g, "\u2019")
+    .replace(/€/g, "EUR")
+    .replace(/\n/g, " ")
+    .trim();
+}
+
+/** Échappe le texte pour le filtre drawtext FFmpeg (mode text). */
+function escapeDrawtext(text: string): string {
+  return normalizeOverlayText(text)
     .replace(/\\/g, "\\\\")
     .replace(/:/g, "\\:")
-    .replace(/'/g, "\\'")
     .replace(/%/g, "\\%")
-    .replace(/\n/g, " ");
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]");
 }
 
 const PIN_EMOJI_RE = /^[\u{1F4CD}\u{1F4CC}]\s*/u;
@@ -355,17 +383,17 @@ async function burnTextOverlays(
     const stroke = layer.stroke ?? "dark";
     const shadow =
       stroke === "none"
-        ? "shadowcolor=black@0.78:shadowx=2:shadowy=3:"
-        : "shadowcolor=black@0.72:shadowx=2:shadowy=3:";
+        ? "shadowcolor=black@0.85:shadowx=3:shadowy=4:"
+        : "shadowcolor=black@0.82:shadowx=3:shadowy=4:";
     const borderw =
-      stroke === "none" ? 0 : Math.max(1, Math.round(1.05 * scale));
+      stroke === "none" ? 0 : Math.max(2, Math.round(2.35 * scale));
     const bordercolor =
       stroke === "light"
-        ? "white@0.55"
+        ? "white@0.65"
         : stroke === "gold"
-          ? "0xC4A574@0.85"
+          ? "0xC4A574@0.9"
           : stroke === "dark"
-            ? "black@0.5"
+            ? "black@0.72"
             : "black@0";
     const bg = layer.bg?.replace("#", "");
     const bgAlpha = Math.min(1, Math.max(0, layer.bgAlpha ?? 0));
@@ -373,13 +401,15 @@ async function burnTextOverlays(
       bg && bgAlpha > 0.02
         ? `box=1:boxcolor=0x${bg}@${bgAlpha.toFixed(2)}:boxborderw=${Math.round(22 * scale)}:`
         : "";
-    const fade = Math.min(TEXT_FADE_SECONDS, (end - start) / 2);
+    const fadeMax = layer.fadeSec ?? TEXT_FADE_SECONDS;
+    const fade = Math.min(fadeMax, (end - start) / 2);
     const alphaExpr =
       fade > 0.001
         ? `if(lt(t\\,${start.toFixed(2)}+${fade.toFixed(2)})\\,(t-${start.toFixed(2)})/${fade.toFixed(2)}\\,if(gt(t\\,${end.toFixed(2)}-${fade.toFixed(2)})\\,(${end.toFixed(2)}-t)/${fade.toFixed(2)}\\,1))`
         : "1";
     const enable = `between(t\\,${start.toFixed(2)}\\,${end.toFixed(2)})`;
-    const textY = `(h-text_h)*${yN.toFixed(3)}`;
+    // Éviter "text_h" / "text_w" comme noms d’options mal parsés
+    const textY = `h*${yN.toFixed(3)}-th/2`;
 
     const brand = resolveBrandIcon(layer.icon, layer.content);
     let textContent =
@@ -387,6 +417,10 @@ async function burnTextOverlays(
     if (brand?.kind === "whatsapp") {
       textContent = textContent.replace(/^whatsapp\s*/i, "").trim();
     }
+    if (layer.look === "cinema" || layer.look === "cinema-meta") {
+      textContent = applyCinemaTracking(textContent, layer.look);
+    }
+    textContent = escapeDrawtext(textContent);
 
     const font = resolveDrawtextFont(layer.fontId);
     const fontPart = font ? `fontfile=${font}:` : "";
@@ -401,10 +435,10 @@ async function burnTextOverlays(
       const out = `v${nextLabelIdx++}`;
       const textX = brand
         ? `main_w*${xN.toFixed(3)}-${pairW}/2+${iconPx + gap}`
-        : `(w-text_w)*${xN.toFixed(3)}`;
+        : `w*${xN.toFixed(3)}-tw/2`;
       filterParts.push(
         `${lastLabel}drawtext=${fontPart}` +
-          `text='${escapeDrawtext(textContent)}':` +
+          `text='${textContent}':` +
           `fontsize=${fontsize}:fontcolor=0x${color}:` +
           `borderw=${borderw}:bordercolor=${bordercolor}:` +
           shadow +
@@ -417,11 +451,10 @@ async function burnTextOverlays(
     }
 
     if (brand) {
-      const inputIdx = iconInputs.length + 1; // 0 = vidéo
+      const inputIdx = iconInputs.length + 1;
       iconInputs.push(brand.path);
       const scaled = `icon${inputIdx}`;
       const out = `v${nextLabelIdx++}`;
-      // overlay: h/w = taille de l’icône — utiliser main_w / main_h
       const iconXFinal = `main_w*${xN.toFixed(3)}-${pairW}/2`;
       const iconY = `(main_h-${iconPx})*${yN.toFixed(3)}`;
       filterParts.push(
@@ -600,7 +633,7 @@ export type LocalMediaInput = {
 
 export async function buildSlideshowMp4(
   medias: LocalMediaInput[],
-  templateId = "maison-moderne",
+  templateId = "appartement-premium",
   edits?: RenderEditOptions,
 ): Promise<Buffer> {
   if (!medias.length) {
@@ -747,6 +780,180 @@ export async function buildSlideshowMp4(
     }
 
     return await fs.readFile(finalPath);
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/**
+ * Photos → Veo 3.1 Fast (I2V, parallèle) → xfade → master sans texte + final textes.
+ */
+export type VeoReelBuildResult = {
+  final: Buffer;
+  master: Buffer;
+  durationSec: number;
+  textLayers: TextLayerEdit[];
+};
+
+export async function buildVeoReelMp4(
+  medias: LocalMediaInput[],
+  templateId = "appartement-premium",
+  edits?: RenderEditOptions,
+  property?: PropertyListing | null,
+): Promise<VeoReelBuildResult> {
+  if (!medias.length) {
+    throw new Error("Aucun média à monter.");
+  }
+
+  const listing = property ? normalizeProperty(property) : null;
+  const cinema = getCinemaStyle(templateId);
+  const base = getRecipe(templateId);
+  const recipe: RenderRecipe = {
+    ...base,
+    fadeSeconds: cinema.fadeSeconds,
+    transition: edits?.transition || cinema.transitions[0] || "fadeblack",
+    tripleStrip: false,
+    grade: cinema.grade,
+  };
+
+  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "areo-veo-"));
+
+  try {
+    const limited = (
+      base.singleShot ? medias.slice(0, 1) : medias
+    ).slice(0, MAX_MEDIAS_PER_VIDEO);
+
+    // Veo en parallèle = durée ~ max(clip) au lieu de la somme
+    const clips = await Promise.all(
+      limited.map(async (media, i) => {
+        const clipPath = path.join(
+          workDir,
+          `clip-${String(i).padStart(3, "0")}.mp4`,
+        );
+
+        if (media.kind === "video") {
+          const overrideDuration = edits?.clipDurations?.[i];
+          const trimStart = edits?.clipTrimStarts?.[i] ?? 0;
+          const duration = await videoToClip(
+            media.localPath,
+            clipPath,
+            recipe,
+            overrideDuration ?? recipe.videoMaxSeconds,
+            trimStart,
+          );
+          return { path: clipPath, duration };
+        }
+
+        console.log(
+          `[veo-reel] clip ${i + 1}/${limited.length} — Veo Fast (parallèle)…`,
+        );
+        const imageUrl = await uploadLocalImageToFal(media.localPath);
+        const { videoUrl, requestId } = await generateVeoClipFromImage({
+          imageUrl,
+          prompt: cinemaMotionPrompt(templateId, i),
+          negativePrompt: cinemaNegative(templateId),
+        });
+        console.log(`[veo-reel] requestId ${requestId}`);
+
+        const rawPath = path.join(
+          workDir,
+          `veo-raw-${String(i).padStart(3, "0")}.mp4`,
+        );
+        await downloadVeoVideoToFile(videoUrl, rawPath);
+
+        const duration = await videoToClip(
+          rawPath,
+          clipPath,
+          recipe,
+          VEO_CLIP_SECONDS,
+          0,
+        );
+        return { path: clipPath, duration };
+      }),
+    );
+
+    const outputPath = path.join(workDir, "output.mp4");
+    const transitionArg: string | string[] =
+      edits?.transitions?.length === clips.length - 1
+        ? edits.transitions
+        : cinemaTransitions(templateId, Math.max(0, clips.length - 1));
+
+    await concatWithXfade(
+      clips,
+      recipe.fadeSeconds,
+      transitionArg,
+      outputPath,
+    );
+
+    const masterPath = path.join(workDir, "output-master.mp4");
+    const totalApprox = clips.reduce((s, c) => s + c.duration, 0);
+    const fadeOutStart = Math.max(0.5, totalApprox - 0.6);
+    await runFfmpeg([
+      "-y",
+      "-i",
+      outputPath,
+      "-vf",
+      `fade=t=in:st=0:d=0.35,fade=t=out:st=${fadeOutStart}:d=0.55`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "20",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      "-an",
+      masterPath,
+    ]);
+
+    const finalPath = path.join(workDir, "output-final.mp4");
+    let layers: TextLayerEdit[] =
+      edits?.textLayers?.length
+        ? edits.textLayers
+        : sanitizeEditText(edits?.text)
+          ? [
+              {
+                content: sanitizeEditText(edits?.text),
+                fontId: "playfair",
+                start: 0.35,
+                duration: Math.min(3.4, Math.max(2.2, totalApprox * 0.28)),
+                x: 0.5,
+                y: 0.78,
+                scale: 1.12,
+                color: "#F5F0E6",
+                stroke: "dark",
+              },
+            ]
+          : [];
+
+    if (
+      listing &&
+      propertyHasContent(listing) &&
+      !(edits?.textLayers && edits.textLayers.length)
+    ) {
+      layers = buildCinemaTextLayers(
+        listing,
+        clips.length,
+        VEO_CLIP_SECONDS,
+        recipe.fadeSeconds,
+        templateId,
+      );
+    }
+
+    if (layers.length) {
+      await burnTextOverlays(masterPath, finalPath, layers);
+    } else {
+      await fs.copyFile(masterPath, finalPath);
+    }
+
+    return {
+      final: await fs.readFile(finalPath),
+      master: await fs.readFile(masterPath),
+      durationSec: totalApprox,
+      textLayers: layers,
+    };
   } finally {
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
   }

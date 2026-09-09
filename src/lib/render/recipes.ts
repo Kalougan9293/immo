@@ -1,7 +1,7 @@
 import type { TemplateId } from "@/data/templates";
 
 /**
- * 6 signatures distinctes — 1 police dominante par modèle.
+ * Signatures distinctes — 1 police dominante par modèle.
  */
 export type MotionStyle =
   | "punch"
@@ -30,6 +30,67 @@ export type RenderRecipe = {
 };
 
 export const RECIPES: Record<TemplateId, RenderRecipe> = {
+  "dynamic-reel": {
+    imageSeconds: 4,
+    videoMaxSeconds: 4.5,
+    fadeSeconds: 0.38,
+    kenBurnsZoom: 1.06,
+    zoomSpeed: 1.0,
+    motion: "crawl",
+    transition: "fadeblack",
+    grade: { brightness: 0.02, contrast: 1.08, saturation: 0.92 },
+  },
+  "dynamic-pulse": {
+    imageSeconds: 4,
+    videoMaxSeconds: 4.5,
+    fadeSeconds: 0.18,
+    kenBurnsZoom: 1.1,
+    zoomSpeed: 0.55,
+    motion: "pulse",
+    transition: "slideleft",
+    grade: { brightness: 0.04, contrast: 1.12, saturation: 1.05 },
+  },
+  "dynamic-marina": {
+    imageSeconds: 4,
+    videoMaxSeconds: 4.5,
+    fadeSeconds: 0.32,
+    kenBurnsZoom: 1.07,
+    zoomSpeed: 0.85,
+    motion: "glide",
+    transition: "smoothleft",
+    grade: { brightness: 0.05, contrast: 1.06, saturation: 1.08 },
+  },
+  "dynamic-noir": {
+    imageSeconds: 4,
+    videoMaxSeconds: 4.5,
+    fadeSeconds: 0.55,
+    kenBurnsZoom: 1.04,
+    zoomSpeed: 1.15,
+    motion: "crawl",
+    transition: "fadeblack",
+    grade: { brightness: -0.06, contrast: 1.22, saturation: 0.82 },
+  },
+  "dynamic-bold": {
+    imageSeconds: 4,
+    videoMaxSeconds: 4.5,
+    fadeSeconds: 0.12,
+    kenBurnsZoom: 1.14,
+    zoomSpeed: 0.4,
+    motion: "rush",
+    transition: "circleopen",
+    grade: { brightness: 0.05, contrast: 1.2, saturation: 1.12 },
+  },
+  "dynamic-warm": {
+    imageSeconds: 4,
+    videoMaxSeconds: 4.5,
+    fadeSeconds: 0.4,
+    kenBurnsZoom: 1.08,
+    zoomSpeed: 0.9,
+    motion: "drift",
+    transition: "dissolve",
+    grade: { brightness: 0.08, contrast: 1.02, saturation: 1.18 },
+  },
+
   // ——— 1 Domino Paris — crawl doux, playfair ———
   "appartement-premium": {
     imageSeconds: 2.85,
@@ -42,19 +103,19 @@ export const RECIPES: Record<TemplateId, RenderRecipe> = {
     grade: { brightness: 0.04, contrast: 1.05, saturation: 0.96 },
   },
 
-  // ——— 2 Dubai Marina — drift, script ———
-  "maison-moderne": {
-    imageSeconds: 2.7,
-    videoMaxSeconds: 4.0,
-    fadeSeconds: 0.28,
+  // ——— Paris Haussmann — crawl doux, sans texte ———
+  "paris-haussmann": {
+    imageSeconds: 2.2,
+    videoMaxSeconds: 3.2,
+    fadeSeconds: 0.22,
     kenBurnsZoom: 1.1,
-    zoomSpeed: 0.85,
-    motion: "drift",
-    transition: "dissolve",
-    grade: { brightness: 0.055, contrast: 1.06, saturation: 1.06 },
+    zoomSpeed: 0.88,
+    motion: "crawl",
+    transition: "fade",
+    grade: { brightness: 0.05, contrast: 1.06, saturation: 0.98 },
   },
 
-  // ——— 3 Cascade villa — glide ———
+  // ——— Cascade villa — glide ———
   "villa-luxe": {
     imageSeconds: 2.4,
     videoMaxSeconds: 3.5,
@@ -66,20 +127,7 @@ export const RECIPES: Record<TemplateId, RenderRecipe> = {
     grade: { brightness: 0.05, contrast: 1.09, saturation: 1.15 },
   },
 
-  // ——— 4 One-shot avance rapide — sweep, pas de zoom punch ———
-  "hotel-boutique": {
-    imageSeconds: 11.5,
-    videoMaxSeconds: 11.5,
-    fadeSeconds: 0.05,
-    kenBurnsZoom: 1.38,
-    zoomSpeed: 1.0,
-    motion: "sweep",
-    transition: "fade",
-    grade: { brightness: 0.03, contrast: 1.1, saturation: 1.04 },
-    singleShot: true,
-  },
-
-  // ——— 5 Dynamique fitness — rush / anton ———
+  // ——— Fitness — rush / anton ———
   "salle-fitness": {
     imageSeconds: 2.05,
     videoMaxSeconds: 2.85,
@@ -91,7 +139,7 @@ export const RECIPES: Record<TemplateId, RenderRecipe> = {
     grade: { brightness: 0.025, contrast: 1.2, saturation: 1.1 },
   },
 
-  // ——— 6 Brand invest — slide ———
+  // ——— Brand invest — slide ———
   "restaurant-chic": {
     imageSeconds: 2.6,
     videoMaxSeconds: 3.8,
@@ -108,5 +156,5 @@ export function getRecipe(templateId: string): RenderRecipe {
   if (templateId in RECIPES) {
     return RECIPES[templateId as TemplateId];
   }
-  return RECIPES["maison-moderne"];
+  return RECIPES["appartement-premium"];
 }

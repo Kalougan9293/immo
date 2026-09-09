@@ -13,6 +13,11 @@ type TemplateCardProps = {
   onPreview: (id: Template["id"]) => void;
 };
 
+/**
+ * Desktop : lecture au survol.
+ * Mobile : cover + Play → tap ouvre la modal (vidéo en autoplay).
+ * Pas d’autoplay grille : data, batterie, grille plus lisible.
+ */
 export function TemplateCard({
   template,
   selected,
@@ -22,17 +27,18 @@ export function TemplateCard({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hovering, setHovering] = useState(false);
   const hasDemo = Boolean(template.demo);
+  const showVideo = hasDemo && hovering;
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !hasDemo) return;
-    if (hovering) {
+    if (showVideo) {
       void video.play().catch(() => undefined);
     } else {
       video.pause();
       video.currentTime = 0;
     }
-  }, [hovering, hasDemo]);
+  }, [showVideo, hasDemo]);
 
   return (
     <div
@@ -66,7 +72,7 @@ export function TemplateCard({
             sizes="(max-width: 640px) 45vw, 240px"
             className={cn(
               "object-cover transition-all duration-500 group-hover:scale-[1.04]",
-              hasDemo && hovering ? "opacity-0" : "opacity-100",
+              showVideo ? "opacity-0" : "opacity-100",
             )}
           />
           {hasDemo ? (
@@ -74,7 +80,7 @@ export function TemplateCard({
               ref={videoRef}
               className={cn(
                 "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
-                hovering ? "opacity-100" : "opacity-0",
+                showVideo ? "opacity-100" : "opacity-0",
               )}
               src={template.demo}
               muted
@@ -101,7 +107,7 @@ export function TemplateCard({
           <Check className="size-3.5" strokeWidth={2.5} />
         </button>
 
-        {hasDemo ? (
+        {hasDemo && !showVideo ? (
           <div className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center opacity-90 transition-opacity group-hover:opacity-0">
             <span className="flex size-11 items-center justify-center rounded-full border border-white/30 bg-black/45 text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md">
               <Play className="size-4 fill-current" strokeWidth={0} />

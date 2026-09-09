@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AREO_MEDIA_BUCKET } from "@/lib/storage";
 import {
   buildSlideshowMp4,
+  buildVeoReelMp4,
   renderFolderFromMediaPath,
 } from "@/lib/render/ffmpeg";
 import { normalizeEditOptions } from "@/lib/render/edit-options";
@@ -15,9 +16,12 @@ import {
 } from "@/lib/video-retention";
 import { getTemplateById } from "@/data/templates";
 import { MAX_MEDIAS_PER_VIDEO } from "@/lib/media-limits";
+import { engineForTemplate } from "@/lib/render/engine";
+import { normalizeProperty } from "@/lib/dynamic/property";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+/** Veo Fast : ~30–90s / photo — laisse assez de marge pour 10–12 médias. */
+export const maxDuration = 800;
 
 type MediaPayload = {
   path: string;
@@ -30,6 +34,10 @@ type Body = {
   medias: MediaPayload[];
   edits?: unknown;
   replaceVideoId?: string | null;
+  engine?: string;
+  property?: unknown;
+  /** DYNAMIC post-gen : master + signature, sans Veo */
+  mode?: "generate" | "polish";
 };
 
 export async function POST(request: Request) {
@@ -40,6 +48,8 @@ export async function POST(request: Request) {
       ? body.medias.slice(0, MAX_MEDIAS_PER_VIDEO)
       : [];
     const edits = normalizeEditOptions(body.edits);
+    const property = normalizeProperty(body.property);
+    const mode = body.mode === "polish" ? "polish" : "generate";
     const replaceVideoId =
       typeof body.replaceVideoId === "string" && body.replaceVideoId.trim()
         ? body.replaceVideoId.trim()
@@ -51,6 +61,10 @@ export async function POST(request: Request) {
     if (!medias.length) {
       return NextResponse.json({ error: "Aucun média." }, { status: 400 });
     }
+
+    // DYNAMIC generate → Veo ; polish / CLASSIC → FFmpeg
+    const engine =
+      mode === "polish" ? "ffmpeg" : engineForTemplate(templateId);
 
     const supabase = await createClient();
     const {
@@ -86,9 +100,49 @@ export async function POST(request: Request) {
         localMedias.push({ localPath, kind: media.kind });
       }
 
-      const mp4 = await buildSlideshowMp4(localMedias, templateId, edits);
+      let mp4: Buffer;
+      let masterStoragePath: string | null = null;
+      let masterSignedUrl: string | null = null;
+      let textLayers: unknown[] = [];
+      let durationSec: number | null = null;
+
       const folder = renderFolderFromMediaPath(medias[0].path);
-      const storagePath = `${folder}/${Date.now()}-areo.mp4`;
+      const stamp = Date.now();
+
+      if (engine === "veo-fast" && mode === "generate") {
+        const built = await buildVeoReelMp4(
+          localMedias,
+          templateId,
+          edits,
+          property,
+        );
+        mp4 = built.final;
+        durationSec = built.durationSec;
+        textLayers = built.textLayers;
+
+        const masterPath = `${folder}/${stamp}-areo-master.mp4`;
+        const { error: masterUpErr } = await supabase.storage
+          .from(AREO_MEDIA_BUCKET)
+          .upload(masterPath, built.master, {
+            contentType: "video/mp4",
+            upsert: false,
+            cacheControl: "3600",
+          });
+        if (masterUpErr) throw new Error(masterUpErr.message);
+        masterStoragePath = masterPath;
+        const { data: masterSigned, error: masterSignErr } =
+          await supabase.storage
+            .from(AREO_MEDIA_BUCKET)
+            .createSignedUrl(masterPath, 60 * 60);
+        if (masterSignErr || !masterSigned?.signedUrl) {
+          throw new Error(masterSignErr?.message || "Master URL impossible.");
+        }
+        masterSignedUrl = masterSigned.signedUrl;
+      } else {
+        mp4 = await buildSlideshowMp4(localMedias, templateId, edits);
+      }
+
+      const storagePath = `${folder}/${stamp}-areo.mp4`;
 
       const { error: uploadError } = await supabase.storage
         .from(AREO_MEDIA_BUCKET)
@@ -110,13 +164,19 @@ export async function POST(request: Request) {
 
       let savedVideoId: string | null = null;
       let evicted = 0;
+      let coverPath: string | null = null;
+      let coverUrl: string | null = null;
       const template = getTemplateById(templateId);
       const sourcePaths = medias.map((m) => m.path);
+      const firstImagePath =
+        sourcePaths.find((p) =>
+          /\.(jpe?g|png|webp|gif|heic|heif|avif|bmp)$/i.test(p),
+        ) ?? null;
 
       if (userId && replaceVideoId) {
         const { data: existing, error: existingError } = await supabase
           .from("areo_videos")
-          .select("id, storage_path")
+          .select("id, storage_path, cover_path, source_paths")
           .eq("id", replaceVideoId)
           .eq("user_id", userId)
           .maybeSingle();
@@ -124,13 +184,19 @@ export async function POST(request: Request) {
         if (existingError) throw new Error(existingError.message);
 
         if (existing) {
+          // polish : garder les photos sources (cover picker) ; generate : maj
+          const nextSources =
+            mode === "polish" && Array.isArray(existing.source_paths)
+              ? (existing.source_paths as string[])
+              : sourcePaths;
+
           const { error: updError } = await supabase
             .from("areo_videos")
             .update({
               template_id: templateId,
               title: template?.title ?? "Vidéo ARÉO",
               storage_path: storagePath,
-              source_paths: sourcePaths,
+              source_paths: nextSources,
             })
             .eq("id", replaceVideoId)
             .eq("user_id", userId);
@@ -142,6 +208,16 @@ export async function POST(request: Request) {
             await supabase.storage.from(AREO_MEDIA_BUCKET).remove([oldPath]);
           }
           savedVideoId = replaceVideoId;
+          coverPath = (existing.cover_path as string | null) ?? null;
+          // Pas encore de cover → 1ʳᵉ photo auto
+          if (!coverPath && firstImagePath) {
+            await supabase
+              .from("areo_videos")
+              .update({ cover_path: firstImagePath })
+              .eq("id", replaceVideoId)
+              .eq("user_id", userId);
+            coverPath = firstImagePath;
+          }
         }
       }
 
@@ -172,6 +248,7 @@ export async function POST(request: Request) {
           evicted += 1;
         }
 
+        coverPath = firstImagePath;
         const { data: inserted, error: insertError } = await supabase
           .from("areo_videos")
           .insert({
@@ -180,6 +257,7 @@ export async function POST(request: Request) {
             title: template?.title ?? "Vidéo ARÉO",
             storage_path: storagePath,
             source_paths: sourcePaths,
+            ...(coverPath ? { cover_path: coverPath } : {}),
           })
           .select("id")
           .single();
@@ -188,12 +266,26 @@ export async function POST(request: Request) {
         savedVideoId = inserted.id as string;
       }
 
+      if (coverPath) {
+        const { data: coverSigned } = await supabase.storage
+          .from(AREO_MEDIA_BUCKET)
+          .createSignedUrl(coverPath, 60 * 60);
+        coverUrl = coverSigned?.signedUrl ?? null;
+      }
+
       return NextResponse.json({
         ok: true,
-        engine: "ffmpeg",
+        engine,
+        mode,
         status: "ready",
         storagePath,
         signedUrl: signed.signedUrl,
+        masterStoragePath,
+        masterSignedUrl,
+        textLayers,
+        durationSec,
+        coverPath,
+        coverUrl,
         saved: Boolean(userId),
         savedVideoId,
         evicted,
