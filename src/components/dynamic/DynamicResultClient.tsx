@@ -7,6 +7,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { downloadFile } from "@/lib/download";
 import { loadRenderSession, type RenderSession } from "@/lib/storage";
+import { DEFAULT_TEMPLATE_ID } from "@/lib/product";
 
 type DynamicResultClientProps = {
   templateId: string;
@@ -95,10 +96,10 @@ export function DynamicResultClient({ templateId }: DynamicResultClientProps) {
           </Button>
         ) : null}
         <Link
-          href="/creer"
+          href={`/creer/medias?template=${DEFAULT_TEMPLATE_ID}`}
           className="min-h-11 touch-manipulation py-3 text-center text-[13px] text-muted hover:text-pearl"
         >
-          Nouveau modèle
+          Nouveau Reel
         </Link>
       </div>
     </div>

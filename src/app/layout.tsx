@@ -21,10 +21,26 @@ const outfit = Outfit({
   display: "swap",
 });
 
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
+const lora = Lora({
+  variable: "--font-lora",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
   display: "swap",
 });
 
@@ -39,19 +55,6 @@ const anton = Anton({
   variable: "--font-anton",
   subsets: ["latin"],
   weight: "400",
-  display: "swap",
-});
-
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const lora = Lora({
-  variable: "--font-lora",
-  subsets: ["latin"],
   display: "swap",
 });
 

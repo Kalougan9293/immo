@@ -192,6 +192,8 @@ type CapCutEditorProps = {
   coverBusy?: boolean;
   dirty: boolean;
   hasExport?: boolean;
+  /** Style d’écriture déjà choisi — police figée, couleur + effets OK. */
+  lockFont?: boolean;
 };
 
 export function CapCutEditor({
@@ -213,6 +215,7 @@ export function CapCutEditor({
   coverBusy = false,
   dirty,
   hasExport = false,
+  lockFont = false,
 }: CapCutEditorProps) {
   const t = useT();
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -1492,6 +1495,7 @@ export function CapCutEditor({
                 className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10 text-[15px] font-medium"
                 style={{
                   fontFamily: getFont(selectedText.fontId).cssFamily,
+                  fontStyle: selectedText.italic ? "italic" : undefined,
                   color: selectedText.color ?? DEFAULT_TEXT_COLOR,
                   WebkitTextStroke: (() => {
                     const c = strokeCssColor(
@@ -1510,10 +1514,12 @@ export function CapCutEditor({
               </span>
               <span className="min-w-0 flex-1 text-left">
                 <span className="block text-[12px] font-medium text-pearl">
-                  Style
+                  {lockFont ? "Apparence" : "Style"}
                 </span>
                 <span className="block truncate text-[10px] text-muted">
-                  Police · taille · couleur
+                  {lockFont
+                    ? "Couleur · taille · effet"
+                    : "Police · taille · couleur"}
                 </span>
               </span>
               {styleOpen ? (
@@ -1541,45 +1547,105 @@ export function CapCutEditor({
 
           {styleOpen ? (
             <div className="mt-2 space-y-2.5 rounded-xl border border-border bg-background p-2">
-              <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-9">
-                {EDITOR_FONTS.map((f) => {
-                  const active = selectedText.fontId === f.id;
-                  return (
+              {!lockFont ? (
+                <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-9">
+                  {EDITOR_FONTS.map((f) => {
+                    const active = selectedText.fontId === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        disabled={disabled}
+                        title={f.label}
+                        onClick={() => {
+                          pushHistory();
+                          updateText(selectedText.id, styleFromFont(f.id));
+                        }}
+                        className={cn(
+                          "flex aspect-square items-center justify-center rounded-lg border text-[13px]",
+                          active
+                            ? "border-gold ring-1 ring-gold/40"
+                            : "border-white/10",
+                        )}
+                        style={{
+                          fontFamily: f.cssFamily,
+                          color: f.defaultColor,
+                          background:
+                            f.bg && f.bgAlpha > 0.02
+                              ? `${f.bg}${Math.round(f.bgAlpha * 255)
+                                  .toString(16)
+                                  .padStart(2, "0")}`
+                              : "#121214",
+                          WebkitTextStroke: strokeCssColor(f.stroke)
+                            ? `0.6px ${strokeCssColor(f.stroke)}`
+                            : undefined,
+                          paintOrder: "stroke fill",
+                        }}
+                      >
+                        Aa
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {lockFont ? (
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {(
+                    [
+                      {
+                        id: "soft",
+                        label: "Doux",
+                        patch: {
+                          stroke: "dark" as const,
+                          bg: null as string | null,
+                          bgAlpha: 0,
+                        },
+                      },
+                      {
+                        id: "outline",
+                        label: "Contour",
+                        patch: {
+                          stroke: "light" as const,
+                          bg: null as string | null,
+                          bgAlpha: 0,
+                        },
+                      },
+                      {
+                        id: "banner",
+                        label: "Bandeau",
+                        patch: {
+                          stroke: "none" as const,
+                          bg: "#0A0A0C",
+                          bgAlpha: 0.55,
+                        },
+                      },
+                      {
+                        id: "gold",
+                        label: "Or",
+                        patch: {
+                          stroke: "gold" as const,
+                          bg: null as string | null,
+                          bgAlpha: 0,
+                        },
+                      },
+                    ] as const
+                  ).map((fx) => (
                     <button
-                      key={f.id}
+                      key={fx.id}
                       type="button"
                       disabled={disabled}
-                      title={f.label}
                       onClick={() => {
                         pushHistory();
-                        updateText(selectedText.id, styleFromFont(f.id));
+                        updateText(selectedText.id, { ...fx.patch });
                       }}
-                      className={cn(
-                        "flex aspect-square items-center justify-center rounded-lg border text-[13px]",
-                        active
-                          ? "border-gold ring-1 ring-gold/40"
-                          : "border-white/10",
-                      )}
-                      style={{
-                        fontFamily: f.cssFamily,
-                        color: f.defaultColor,
-                        background:
-                          f.bg && f.bgAlpha > 0.02
-                            ? `${f.bg}${Math.round(f.bgAlpha * 255)
-                                .toString(16)
-                                .padStart(2, "0")}`
-                            : "#121214",
-                        WebkitTextStroke: strokeCssColor(f.stroke)
-                          ? `0.6px ${strokeCssColor(f.stroke)}`
-                          : undefined,
-                        paintOrder: "stroke fill",
-                      }}
+                      className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[11px] font-medium tracking-wide text-pearl uppercase hover:border-gold/40"
                     >
-                      Aa
+                      {fx.label}
                     </button>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="flex items-center justify-center gap-2">
                 <button

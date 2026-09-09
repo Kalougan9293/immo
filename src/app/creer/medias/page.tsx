@@ -2,6 +2,7 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { MediaUploader } from "@/components/medias/MediaUploader";
 import { getTemplateById } from "@/data/templates";
+import { DEFAULT_TEMPLATE_ID } from "@/lib/product";
 import { redirect } from "next/navigation";
 
 type MediasPageProps = {
@@ -15,29 +16,27 @@ export const metadata = {
 
 export default async function MediasPage({ searchParams }: MediasPageProps) {
   const params = await searchParams;
-  const template = params.template
-    ? getTemplateById(params.template)
-    : undefined;
+  const templateId = params.template ?? DEFAULT_TEMPLATE_ID;
+  const template = getTemplateById(templateId) ?? getTemplateById(DEFAULT_TEMPLATE_ID);
 
-  if (!params.template || !template) {
-    redirect("/creer");
+  if (!template) {
+    redirect(`/creer/medias?template=${DEFAULT_TEMPLATE_ID}`);
   }
 
   const isRedo = params.refaire === "1";
-  const isDynamic = template.category === "dynamic";
 
   return (
     <AppShell contained>
       <Header
         showBack
-        backHref={isRedo ? "/compte" : "/creer"}
-        stepLabel={isDynamic ? "2 / 4" : "2 / 3"}
+        backHref={isRedo ? "/compte" : "/"}
+        stepLabel="1 / 4"
       />
       <main className="flex flex-1 flex-col">
         <MediaUploader
           templateId={template.id}
           restoreSession={isRedo}
-          flow={isDynamic ? "dynamic" : "classic"}
+          flow="dynamic"
         />
       </main>
     </AppShell>

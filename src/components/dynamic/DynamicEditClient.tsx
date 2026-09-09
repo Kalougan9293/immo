@@ -58,8 +58,12 @@ function layersToTimeline(raw: unknown[] | undefined): TimelineTextLayer[] {
           L.stroke === "gold"
             ? L.stroke
             : "dark",
-        bg: null,
-        bgAlpha: 0,
+        bg:
+          typeof L.bg === "string" && /^#[0-9A-Fa-f]{6}$/.test(L.bg)
+            ? L.bg
+            : null,
+        bgAlpha: typeof L.bgAlpha === "number" ? L.bgAlpha : 0,
+        italic: L.italic === true,
         lane: i % 2,
         look:
           L.look === "cinema" || L.look === "cinema-meta" ? L.look : undefined,
@@ -557,6 +561,7 @@ export function DynamicEditClient({ templateId }: DynamicEditClientProps) {
           coverBusy={coverBusy}
           dirty={dirty}
           hasExport={Boolean(session?.signedUrl)}
+          lockFont
         />
       </div>
 

@@ -1,10 +1,16 @@
-import type { TextLayerEdit } from "@/lib/render/edit-options";
+import type { TextLayerEdit, TextStyleLook } from "@/lib/render/edit-options";
 import {
   CINEMA_META_FADE_SEC,
   CINEMA_TITLE_FADE_SEC,
+  lookForColor,
 } from "@/lib/render/edit-options";
-import type { PropertyListing } from "./property";
-import { propertyHasContent } from "./property";
+import {
+  getWritingStyle,
+  type WritingStyle,
+} from "@/data/writing-styles";
+import type { PropertyFieldKey, PropertyListing } from "./property";
+import { orderedPropertyEntries, propertyHasContent } from "./property";
+import { VEO_FIDELITY_PROMPT } from "@/lib/ai/veo";
 
 /** Crème éditorial (réf. Gemini). */
 export const CINEMA_TEXT_COLOR = "#F5F0E6";
@@ -17,16 +23,13 @@ export type CinemaStyleId =
   | "bold"
   | "warm";
 
+/** Motion / rythme / grade — sans typo (écriture = WritingStyle). */
 export type CinemaStyle = {
   id: CinemaStyleId;
   fadeSeconds: number;
   transitions: readonly string[];
   motions: readonly string[];
   negative: string;
-  /** Police overlay */
-  fontId: "playfair" | "modern" | "cinzel" | "anton" | "serif" | "script";
-  textColor: string;
-  titleScale: number;
   grade: { brightness: number; contrast: number; saturation: number };
 };
 
@@ -36,106 +39,86 @@ const FIDELITY =
 const NO_EXTRAS =
   "No text, no people, no watermark, no logos.";
 
-/** Motions order-agnostic — le style (vitesse / énergie) change, pas la pièce. */
+/** Motions order-agnostic — le style (vitesse / energie) change, pas la piece. */
 const EDITORIAL_LOOK =
-  "Luxury editorial real-estate cinema, 9:16, soft daylight, photoreal, filmic contrast, quiet prestige, extremely slow camera.";
+  "Luxury editorial real-estate cinema, 9:16, cool soft daylight, photoreal, filmic contrast, museum-quiet prestige, GLACIAL camera speed — almost meditative.";
 
 const PULSE_LOOK =
-  "Snappy luxury TikTok real-estate cinema, 9:16, crisp contrast, photoreal, energetic but locked gimbal, short punchy moves.";
+  "Ultra-snappy TikTok real-estate cinema, 9:16, crisp high contrast, photoreal, locked gimbal, VERY SHORT punchy moves, social-media energy, fast tempo.";
 
 const MARINA_LOOK =
-  "Bright lifestyle villa cinema, 9:16, high-key midday sun, airy photoreal, floating glide, warm prestige.";
+  "Bright lifestyle villa cinema, 9:16, blown-out high-key midday sun, airy photoreal, FLOATING Steadicam glide, sunny vacation prestige.";
 
 const NOIR_LOOK =
-  "Dark prestige real-estate cinema, 9:16, moody low-key contrast, photoreal, almost-still tripod, quiet drama, restrained luxury.";
+  "Dark prestige real-estate cinema, 9:16, heavy low-key shadows, desaturated mood, photoreal, ALMOST FROZEN tripod, quiet drama, night-luxury stillness.";
 
 const BOLD_LOOK =
-  "Bold vertical real-estate cinema, 9:16, high-contrast punch, photoreal, assertive locked moves toward architecture DETAIL, energetic impact.";
+  "Aggressive vertical real-estate cinema, 9:16, extreme high-contrast punch, photoreal, HARD locked moves toward architecture DETAIL, slam-impact energy.";
 
 const WARM_LOOK =
-  "Warm golden-hour real-estate cinema, 9:16, soft amber light feel, photoreal, wide gentle pans, romantic soft prestige.";
+  "Warm golden-hour real-estate cinema, 9:16, strong amber/orange light, soft photoreal, WIDE sweeping pans across the whole room, romantic soft prestige.";
 
 export const CINEMA_STYLES: Record<CinemaStyleId, CinemaStyle> = {
-  /** Lent · fadeblack · prestige calme (démo Editorial) */
+  /** Lent · fadeblack · prestige calme */
   editorial: {
     id: "editorial",
-    fadeSeconds: 0.45,
-    transitions: ["fadeblack", "fadeblack", "fadeblack", "distance", "fade"],
+    fadeSeconds: 0.55,
+    transitions: ["fadeblack", "fadeblack", "fadeblack", "fadeblack", "fadeblack"],
     motions: [
-      `${FIDELITY} ${EDITORIAL_LOOK} Locked tripod EXTREMELY SLOW constant-speed PUSH-IN, rock-steady, subtle depth parallax only. ${NO_EXTRAS}`,
-      `${FIDELITY} ${EDITORIAL_LOOK} Locked tripod ultra-slow LATERAL DRIFT right then settle, gimbal locked, no shake. ${NO_EXTRAS}`,
-      `${FIDELITY} ${EDITORIAL_LOOK} Locked slider very slow PUSH-IN toward the brightest architectural focal point, quiet luxury. ${NO_EXTRAS}`,
-      `${FIDELITY} ${EDITORIAL_LOOK} Locked tripod ultra-slow DRIFT left with minimal parallax, serene cinema, rock-steady. ${NO_EXTRAS}`,
-      `${FIDELITY} ${EDITORIAL_LOOK} Locked gentle SLOW PUSH-IN then soft hold, editorial real-estate mood, rock-steady. ${NO_EXTRAS}`,
+      `${FIDELITY} ${EDITORIAL_LOOK} Locked tripod EXTREMELY SLOW constant-speed PUSH-IN over the full clip, rock-steady, tiny depth parallax only. ${NO_EXTRAS}`,
+      `${FIDELITY} ${EDITORIAL_LOOK} Locked tripod glacial LATERAL DRIFT right, barely perceptible, settle and hold, no shake. ${NO_EXTRAS}`,
+      `${FIDELITY} ${EDITORIAL_LOOK} Locked slider ultra-slow PUSH-IN toward brightest architectural focal point, quiet luxury stillness. ${NO_EXTRAS}`,
     ],
     negative:
-      "handheld shake, wobble, bobbing, fast whip, morphing furniture, invented objects, people, text, watermark, cartoon, warped walls",
-    fontId: "playfair",
-    textColor: CINEMA_TEXT_COLOR,
-    titleScale: 1.78,
-    grade: { brightness: 0.03, contrast: 1.1, saturation: 0.94 },
+      "handheld shake, wobble, bobbing, fast whip, morphing furniture, invented objects, people, text, watermark, cartoon, warped walls, snappy cuts, TikTok energy",
+    grade: { brightness: 0.0, contrast: 1.12, saturation: 0.88 },
   },
-  /** Rapide · slides / wipes · punchy (Pulse) */
+  /** Rapide · slides / wipes · punchy */
   pulse: {
     id: "pulse",
-    fadeSeconds: 0.14,
-    transitions: ["slideleft", "wipeleft", "slideright", "slideleft", "wiperight"],
+    fadeSeconds: 0.08,
+    transitions: ["slideleft", "wipeleft", "slideright", "wiperight", "slideleft"],
     motions: [
-      `${FIDELITY} ${PULSE_LOOK} Locked tripod SHORT energetic SMOOTH push-in at constant speed then brief hold, no shake. ${NO_EXTRAS}`,
-      `${FIDELITY} ${PULSE_LOOK} Locked tripod quick micro PUSH then SNAP settle, snappy luxury, rock-steady. ${NO_EXTRAS}`,
-      `${FIDELITY} ${PULSE_LOOK} Locked slider crisp FORWARD GLIDE, faster than editorial but still smooth, no handheld. ${NO_EXTRAS}`,
-      `${FIDELITY} ${PULSE_LOOK} Locked tripod snappy micro DRIFT right then hard settle, punchy real-estate feel. ${NO_EXTRAS}`,
-      `${FIDELITY} ${PULSE_LOOK} Locked assertive PUSH-IN toward architecture detail, brisk tempo, rock-steady. ${NO_EXTRAS}`,
+      `${FIDELITY} ${PULSE_LOOK} Locked tripod SHORT energetic SMOOTH push-in then hard settle, snappy luxury, no shake. ${NO_EXTRAS}`,
+      `${FIDELITY} ${PULSE_LOOK} Locked tripod quick micro PUSH then SNAP settle, punchy social tempo, rock-steady. ${NO_EXTRAS}`,
+      `${FIDELITY} ${PULSE_LOOK} Locked slider crisp FORWARD RUSH, much faster than editorial, brief hold, no handheld. ${NO_EXTRAS}`,
     ],
     negative:
-      "slow dreamy drift, handheld, wobble, morphing, invented objects, people, text, watermark, soft mushy focus",
-    fontId: "modern",
-    textColor: "#FFFFFF",
-    titleScale: 1.62,
-    grade: { brightness: 0.04, contrast: 1.14, saturation: 1.06 },
+      "slow dreamy drift, glacial pace, handheld, wobble, morphing, invented objects, people, text, watermark, soft mushy focus, fade to black",
+    grade: { brightness: 0.06, contrast: 1.2, saturation: 1.12 },
   },
-  /** Moyen · smoothleft/fade · glide lifestyle (Marina) */
+  /** Moyen · smooth glide lifestyle */
   marina: {
     id: "marina",
-    fadeSeconds: 0.3,
-    transitions: ["smoothleft", "fade", "smoothright", "fade", "smoothleft"],
+    fadeSeconds: 0.28,
+    transitions: ["smoothleft", "smoothright", "smoothleft", "fade", "smoothright"],
     motions: [
-      `${FIDELITY} ${MARINA_LOOK} Locked floating FORWARD GLIDE at medium-slow speed, soft parallax, bright airy light, rock-steady. ${NO_EXTRAS}`,
+      `${FIDELITY} ${MARINA_LOOK} Locked floating FORWARD GLIDE at medium speed, soft parallax, bright airy light, rock-steady. ${NO_EXTRAS}`,
       `${FIDELITY} ${MARINA_LOOK} Locked gentle LATERAL DRIFT with sunny lifestyle mood, smooth constant speed, no shake. ${NO_EXTRAS}`,
-      `${FIDELITY} ${MARINA_LOOK} Locked slider dreamy medium PUSH-IN, warm daylight, calm villa prestige, rock-steady. ${NO_EXTRAS}`,
-      `${FIDELITY} ${MARINA_LOOK} Locked floating push toward depth of the space, bright high-key, soft reflections, rock-steady. ${NO_EXTRAS}`,
-      `${FIDELITY} ${MARINA_LOOK} Locked gentle reveal PUSH-IN as if stepping into the space, airy lifestyle cinema, rock-steady. ${NO_EXTRAS}`,
+      `${FIDELITY} ${MARINA_LOOK} Locked floating reveal as if stepping into the space, high-key daylight, soft reflections. ${NO_EXTRAS}`,
     ],
     negative:
-      "handheld shake, wobble, aggressive smash zoom, morphing furniture, invented objects, people, text, watermark, cartoon, dark muddy grade, warped walls",
-    fontId: "cinzel",
-    textColor: "#F7F3EB",
-    titleScale: 1.48,
-    grade: { brightness: 0.06, contrast: 1.05, saturation: 1.1 },
+      "handheld shake, wobble, aggressive smash zoom, morphing furniture, invented objects, people, text, watermark, cartoon, dark muddy grade, warped walls, TikTok snap",
+    grade: { brightness: 0.1, contrast: 1.02, saturation: 1.16 },
   },
-  /** Très lent · fadeblack long · grade sombre (Noir) */
+  /** Tres lent · fadeblack · grade sombre */
   noir: {
     id: "noir",
-    fadeSeconds: 0.55,
-    transitions: ["fadeblack", "fadeblack", "fadeblack", "fadeblack", "fade"],
+    fadeSeconds: 0.7,
+    transitions: ["fadeblack", "fadeblack", "fadeblack", "fadeblack", "fadeblack"],
     motions: [
       `${FIDELITY} ${NOIR_LOOK} Locked tripod NEARLY STATIC then ultra-micro PUSH-IN, rock-steady, prestige stillness. ${NO_EXTRAS}`,
-      `${FIDELITY} ${NOIR_LOOK} Locked tripod extremely slow crawl FORWARD with minimal parallax, moody cinema, no shake. ${NO_EXTRAS}`,
-      `${FIDELITY} ${NOIR_LOOK} Locked almost-still frame with tiny LATERAL micro-drift, dark luxury mood, rock-steady. ${NO_EXTRAS}`,
-      `${FIDELITY} ${NOIR_LOOK} Locked ultra-slow PUSH toward depth of the room then hold, dramatic restraint. ${NO_EXTRAS}`,
-      `${FIDELITY} ${NOIR_LOOK} Locked tripod glacial push-in, quiet noir prestige, rock-steady. ${NO_EXTRAS}`,
+      `${FIDELITY} ${NOIR_LOOK} Locked almost-still frame with tiny LATERAL micro-drift, heavy shadow mood, no shake. ${NO_EXTRAS}`,
+      `${FIDELITY} ${NOIR_LOOK} Locked glacial crawl FORWARD with minimal parallax then long hold, dramatic restraint. ${NO_EXTRAS}`,
     ],
     negative:
-      "fast motion, whip pan, handheld, wobble, bright overexposed look, morphing, invented objects, people, text, watermark, cartoon",
-    fontId: "playfair",
-    textColor: "#D4A84B",
-    titleScale: 1.7,
-    grade: { brightness: -0.06, contrast: 1.22, saturation: 0.82 },
+      "fast motion, whip pan, handheld, wobble, bright overexposed look, morphing, invented objects, people, text, watermark, cartoon, sunny high-key, snappy energy",
+    grade: { brightness: -0.1, contrast: 1.28, saturation: 0.72 },
   },
-  /** Percutant · cercle/wipe · zoom détail (Bold) */
+  /** Percutant · cercle/wipe · zoom detail */
   bold: {
     id: "bold",
-    fadeSeconds: 0.12,
+    fadeSeconds: 0.06,
     transitions: [
       "circleopen",
       "wipeleft",
@@ -145,46 +128,33 @@ export const CINEMA_STYLES: Record<CinemaStyleId, CinemaStyle> = {
     ],
     motions: [
       `${FIDELITY} ${BOLD_LOOK} Locked assertive PUSH-IN toward a clear architectural DETAIL (molding, fixture, material), then hard settle. ${NO_EXTRAS}`,
-      `${FIDELITY} ${BOLD_LOOK} Locked fast-but-smooth FORWARD RUSH at constant speed, impactful reveal of the space, no shake. ${NO_EXTRAS}`,
+      `${FIDELITY} ${BOLD_LOOK} Locked fast-but-smooth FORWARD RUSH at constant speed, impactful reveal, no shake. ${NO_EXTRAS}`,
       `${FIDELITY} ${BOLD_LOOK} Locked punchy micro ZOOM into texture or furniture focal point, snappy settle, rock-steady. ${NO_EXTRAS}`,
-      `${FIDELITY} ${BOLD_LOOK} Locked decisive LATERAL SNAP drift then stop, bold vertical energy, no handheld. ${NO_EXTRAS}`,
-      `${FIDELITY} ${BOLD_LOOK} Locked strong PUSH toward room depth, high-impact real-estate tempo, rock-steady. ${NO_EXTRAS}`,
     ],
     negative:
-      "slow dreamy drift, soft mushy look, handheld, wobble, morphing, invented objects, people, text, watermark",
-    fontId: "anton",
-    textColor: "#FFFFFF",
-    titleScale: 1.88,
-    grade: { brightness: 0.05, contrast: 1.2, saturation: 1.12 },
+      "slow dreamy drift, soft mushy look, handheld, wobble, morphing, invented objects, people, text, watermark, gentle pan, romantic amber",
+    grade: { brightness: 0.04, contrast: 1.28, saturation: 1.08 },
   },
-  /** Doux · dissolve/blanc · grands pans (Ambre) */
+  /** Doux · dissolve/blanc · grands pans */
   warm: {
     id: "warm",
-    fadeSeconds: 0.4,
-    transitions: ["dissolve", "fadewhite", "fade", "dissolve", "fadewhite"],
+    fadeSeconds: 0.48,
+    transitions: ["dissolve", "fadewhite", "dissolve", "fadewhite", "fade"],
     motions: [
-      `${FIDELITY} ${WARM_LOOK} Locked wide gentle LATERAL PAN across the full room, soft constant speed, warm soft prestige. ${NO_EXTRAS}`,
-      `${FIDELITY} ${WARM_LOOK} Locked slow panoramic DRIFT left revealing space, romantic amber mood, rock-steady. ${NO_EXTRAS}`,
-      `${FIDELITY} ${WARM_LOOK} Locked soft medium PUSH-IN with warm daylight feel, gentle and airy, no shake. ${NO_EXTRAS}`,
-      `${FIDELITY} ${WARM_LOOK} Locked wide lateral SWEEP right then soft settle, golden lifestyle cinema. ${NO_EXTRAS}`,
-      `${FIDELITY} ${WARM_LOOK} Locked dreamy slow pan with subtle parallax, soft warm prestige, rock-steady. ${NO_EXTRAS}`,
+      `${FIDELITY} ${WARM_LOOK} Locked wide gentle LATERAL PAN across the FULL room width, soft constant speed, amber prestige. ${NO_EXTRAS}`,
+      `${FIDELITY} ${WARM_LOOK} Locked slow panoramic DRIFT left revealing space, romantic golden mood, rock-steady. ${NO_EXTRAS}`,
+      `${FIDELITY} ${WARM_LOOK} Locked wide lateral SWEEP right then soft settle, dreamy warm lifestyle cinema. ${NO_EXTRAS}`,
     ],
     negative:
-      "harsh contrast, cold blue grade, aggressive smash zoom, handheld, wobble, morphing, invented objects, people, text, watermark, cartoon",
-    fontId: "script",
-    textColor: "#F7F3EB",
-    titleScale: 1.55,
-    grade: { brightness: 0.08, contrast: 1.02, saturation: 1.18 },
+      "harsh contrast, cold blue grade, aggressive smash zoom, handheld, wobble, morphing, invented objects, people, text, watermark, cartoon, TikTok snap, circle wipe",
+    grade: { brightness: 0.12, contrast: 0.98, saturation: 1.28 },
   },
 };
 
 /** Map template DYNAMIC → style cinéma */
 export const TEMPLATE_CINEMA_STYLE: Record<string, CinemaStyleId> = {
   "dynamic-reel": "editorial",
-  "dynamic-pulse": "pulse",
   "dynamic-marina": "marina",
-  "dynamic-noir": "noir",
-  "dynamic-bold": "bold",
   "dynamic-warm": "warm",
 };
 
@@ -198,7 +168,9 @@ export function cinemaMotionPrompt(
   clipIndex: number,
 ): string {
   const style = getCinemaStyle(templateId);
-  return style.motions[clipIndex % style.motions.length];
+  const motion = style.motions[clipIndex % style.motions.length];
+  // Lite : fidélité d’abord, puis le mouvement du style
+  return `${VEO_FIDELITY_PROMPT} Motion brief: ${motion}`;
 }
 
 export function cinemaTransitions(
@@ -214,7 +186,8 @@ export function cinemaTransitions(
 }
 
 export function cinemaNegative(templateId: string): string {
-  return getCinemaStyle(templateId).negative;
+  const styleNeg = getCinemaStyle(templateId).negative;
+  return `${styleNeg}, invented furniture, morphing, camera shake, handheld, people, text, watermark`;
 }
 
 export const CINEMA_FADE_SECONDS = 0.38;
@@ -225,12 +198,17 @@ function clipTimelines(
   clipCount: number,
   clipSec: number,
   fadeSec: number,
+  clipDurations?: number[],
 ): ClipTiming[] {
   const clips: ClipTiming[] = [];
   let cursor = 0;
   for (let i = 0; i < clipCount; i++) {
-    clips.push({ start: cursor, duration: clipSec });
-    cursor += clipSec - (i < clipCount - 1 ? fadeSec : 0);
+    const duration =
+      clipDurations && clipDurations[i] != null
+        ? Math.max(0.5, clipDurations[i])
+        : clipSec;
+    clips.push({ start: cursor, duration });
+    cursor += duration - (i < clipCount - 1 ? fadeSec : 0);
   }
   return clips;
 }
@@ -258,34 +236,54 @@ function layer(
   clip: ClipTiming,
   y: number,
   scale: number,
-  style: CinemaStyle,
+  writing: WritingStyle,
   pad: number,
   look: "cinema" | "cinema-meta",
+  startOverride?: number,
+  durationOverride?: number,
+  colorOverride?: string,
+  paintOverride?: TextStyleLook,
 ): TextLayerEdit {
   const fadeSec =
     look === "cinema" ? CINEMA_TITLE_FADE_SEC : CINEMA_META_FADE_SEC;
-  const start = clip.start + pad;
-  const duration = Math.max(1.8, clip.duration - pad - 0.28);
-  const useCinemaLook = style.fontId !== "script";
+  const start = startOverride ?? clip.start + pad;
+  const duration =
+    durationOverride ?? Math.max(1.8, clip.duration - pad - 0.28);
+  const color = colorOverride ?? writing.textColor;
+  const paint = paintOverride ?? lookForColor(color);
   return {
     content,
-    fontId: style.fontId,
+    fontId: writing.fontId,
     start,
     duration,
     x: 0.5,
     y,
     scale,
-    color: style.textColor,
-    stroke: "dark",
-    bg: null,
-    bgAlpha: 0,
-    ...(useCinemaLook ? { look } : {}),
+    color,
+    stroke: paint.stroke,
+    bg: paint.bg,
+    bgAlpha: paint.bgAlpha,
+    ...(writing.italic ? { italic: true } : {}),
+    ...(writing.cinemaLook ? { look } : {}),
     fadeSec,
   };
 }
 
+function entryLook(
+  key: PropertyFieldKey,
+): "cinema" | "cinema-meta" {
+  return key === "titleLine1" ? "cinema" : "cinema-meta";
+}
+
+function entryScale(key: PropertyFieldKey, titleScale: number): number {
+  if (key === "titleLine1") return Math.min(1.42, titleScale);
+  if (key === "highlight") return 1.15;
+  if (key === "cta") return 1.08;
+  return 1.05;
+}
+
 /**
- * Écriture éditoriale selon le style du modèle DYNAMIC.
+ * Écriture selon le style choisi (typo + rythme) et l’ordre des champs.
  */
 export function buildCinemaTextLayers(
   property: PropertyListing,
@@ -293,116 +291,109 @@ export function buildCinemaTextLayers(
   clipSec = 4,
   fadeSec?: number,
   templateId = "dynamic-reel",
+  writingStyle?: WritingStyle | string | null,
+  clipDurations?: number[],
 ): TextLayerEdit[] {
   if (!propertyHasContent(property) || clipCount < 1) return [];
 
-  const style = getCinemaStyle(templateId);
-  const fade = fadeSec ?? style.fadeSeconds;
-  const clips = clipTimelines(clipCount, clipSec, fade);
+  const cinema = getCinemaStyle(templateId);
+  const fade = fadeSec ?? cinema.fadeSeconds;
+  const clips = clipTimelines(clipCount, clipSec, fade, clipDurations);
   const layers: TextLayerEdit[] = [];
-  const ts = style.titleScale;
+  const totalDur =
+    clips[clips.length - 1].start + clips[clips.length - 1].duration;
 
-  // Entrée plus lente → titres respirent
-  const titlePad = 0.72;
+  // writingStyle legacy ignoré si fieldStyles présents (toujours via property)
+  void writingStyle;
 
-  if (property.titleLine1) {
-    layers.push(
-      layer(
-        property.titleLine1,
-        clips[0],
-        property.titleLine2 ? 0.66 : 0.72,
-        Math.min(1.42, ts),
-        style,
-        titlePad,
-        "cinema",
-      ),
-    );
-  }
-  if (property.titleLine2) {
-    layers.push(
-      layer(
-        property.titleLine2,
-        clips[0],
-        0.77,
-        Math.min(1.32, ts),
-        style,
-        titlePad,
-        "cinema",
-      ),
-    );
-  }
+  const entries = orderedPropertyEntries(property).map((e) => {
+    const w = getWritingStyle(e.styleId);
+    return {
+      content: e.content,
+      key: e.key,
+      writing: w,
+      color: e.color,
+      paint: e.look,
+      y: e.key === "cta" ? 0.86 : e.key === "titleLine1" ? 0.72 : 0.76,
+      scale: entryScale(e.key, w.titleScale),
+      look: entryLook(e.key),
+    };
+  });
 
-  if (property.specs) {
-    const idx = clipCount >= 2 ? 1 : 0;
-    const y = clipCount >= 2 ? 0.76 : 0.84;
-    const pad = clipCount >= 2 ? 0.55 : 2.2;
-    layers.push(
-      layer(property.specs, clips[idx], y, 1.05, style, pad, "cinema-meta"),
-    );
-  }
+  if (!entries.length) return [];
 
-  if (property.highlight) {
-    if (clipCount >= 3) {
+  // Timing par ligne (chaque champ peut avoir son rythme)
+  entries.forEach((e, i) => {
+    const w = e.writing;
+    if (w.pacing === "simultaneous") {
+      const first = clips[0];
+      const pad = 0.55;
+      const dur = Math.max(2.2, totalDur - pad - 0.35);
+      const baseY = 0.62;
       layers.push(
         layer(
-          property.highlight,
-          clips[2],
-          0.76,
-          1.15,
-          style,
-          0.55,
-          "cinema-meta",
+          e.content,
+          first,
+          baseY + i * 0.08,
+          e.scale,
+          w,
+          pad,
+          e.look,
+          first.start + pad,
+          dur,
+          e.color,
+          e.paint,
         ),
       );
-    } else if (clipCount === 2 && !property.specs) {
-      layers.push(
-        layer(
-          property.highlight,
-          clips[1],
-          0.76,
-          1.15,
-          style,
-          0.55,
-          "cinema-meta",
-        ),
+      return;
+    }
+
+    if (w.pacing === "cascade") {
+      const beat = Math.max(
+        1.15,
+        Math.min(2.0, totalDur / Math.max(3, entries.length)),
       );
-    } else if (clipCount === 1 && !property.titleLine1) {
+      const gap = 0.16;
+      const start = 0.35 + i * (beat * 0.55 + gap);
+      if (start + 0.85 > totalDur) return;
+      const dur = Math.min(beat + 0.5, totalDur - start - 0.1);
       layers.push(
         layer(
-          property.highlight,
+          e.content,
           clips[0],
-          0.76,
-          1.15,
-          style,
-          0.72,
-          "cinema-meta",
+          0.68 + (i % 3) * 0.06,
+          e.scale,
+          w,
+          0,
+          e.look,
+          start,
+          dur,
+          e.color,
+          e.paint,
         ),
       );
+      return;
     }
-  }
 
-  if (property.cta) {
-    const last = clips[clips.length - 1];
-    if (clipCount === 1) {
-      layers.push(
-        layer(property.cta, last, 0.88, 0.98, style, 2.6, "cinema-meta"),
-      );
-    } else if (clipCount === 2 && property.specs) {
-      layers.push(
-        layer(property.cta, last, 0.86, 1.0, style, 2.0, "cinema-meta"),
-      );
-    } else if (clipCount >= 3) {
-      const y = clipCount === 3 && property.highlight ? 0.86 : 0.76;
-      const pad = clipCount === 3 && property.highlight ? 2.0 : 0.55;
-      layers.push(
-        layer(property.cta, last, y, 1.08, style, pad, "cinema-meta"),
-      );
-    } else {
-      layers.push(
-        layer(property.cta, last, 0.76, 1.08, style, 0.55, "cinema-meta"),
-      );
-    }
-  }
+    const idx = Math.min(i, clips.length - 1);
+    const clip = clips[idx];
+    const pad = clipCount === 1 ? 0.72 : 0.5;
+    layers.push(
+      layer(
+        e.content,
+        clip,
+        e.y,
+        e.scale,
+        w,
+        pad,
+        e.look,
+        undefined,
+        undefined,
+        e.color,
+        e.paint,
+      ),
+    );
+  });
 
   return layers;
 }

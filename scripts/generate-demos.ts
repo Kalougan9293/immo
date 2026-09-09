@@ -1,13 +1,14 @@
 /**
- * Génère les aperçus des modèles CLASSIC avec le moteur ARÉO.
+ * Aperçus CLASSIC uniquement (slideshow FFmpeg, sans texte).
+ * Les démos DYNAMIC se génèrent avec: npm run demos:dynamic
+ *
  * Usage: npm run demos
- *        npx tsx scripts/generate-demos.ts appartement-premium paris-haussmann
+ *        npx tsx scripts/generate-demos.ts appartement-premium
  */
 import fs from "node:fs/promises";
 import path from "node:path";
 import { buildSlideshowMp4 } from "../src/lib/render/ffmpeg";
 import { getRecipe } from "../src/lib/render/recipes";
-import { demoTextLayersForTemplate } from "../src/lib/render/template-demo-texts";
 import type { TemplateId } from "../src/data/templates";
 
 const ROOT = process.cwd();
@@ -29,7 +30,7 @@ const JOBS: {
   },
   {
     id: "paris-haussmann",
-    folder: "paris",
+    folder: "dynamic",
     file: "paris-haussmann.mp4",
     cover: "paris.jpg",
   },
@@ -38,18 +39,6 @@ const JOBS: {
     folder: "villa",
     file: "villa-luxe.mp4",
     cover: "villa.jpg",
-  },
-  {
-    id: "salle-fitness",
-    folder: "fitness",
-    file: "salle-fitness.mp4",
-    cover: "fitness.jpg",
-  },
-  {
-    id: "restaurant-chic",
-    folder: "restaurant",
-    file: "restaurant-chic.mp4",
-    cover: "restaurant.jpg",
   },
 ];
 
@@ -74,32 +63,26 @@ async function main() {
     : JOBS;
 
   for (const job of jobs) {
-    const dir = path.join(SOURCES, job.folder);
     const recipe = getRecipe(job.id);
+    const dir = path.join(SOURCES, job.folder);
     let images = await listImages(dir);
     if (recipe.singleShot) {
       if (!images.length) {
-        throw new Error(`${job.id}: besoin d’au moins 1 image dans ${dir}`);
+        throw new Error(`${job.id}: besoin d'au moins 1 image dans ${dir}`);
       }
       images = [images[0]];
     } else if (images.length < 3) {
-      throw new Error(`${job.id}: besoin d’au moins 3 images dans ${dir}`);
+      throw new Error(`${job.id}: besoin d'au moins 3 images dans ${dir}`);
     }
 
-    const textLayers = demoTextLayersForTemplate(
-      job.id,
-      recipe.imageSeconds,
-      images.length,
-    );
-
     console.log(
-      `→ ${job.id} (${images.length} photos, ${textLayers.length} textes${recipe.singleShot ? ", single-shot" : ""})`,
+      `-> ${job.id} (${images.length} photos, sans texte${recipe.singleShot ? ", single-shot" : ""})`,
     );
     console.time(job.id);
     const buf = await buildSlideshowMp4(
       images.map((localPath) => ({ localPath, kind: "image" as const })),
       job.id,
-      { textLayers },
+      { textLayers: [] },
     );
     console.timeEnd(job.id);
 
@@ -138,7 +121,8 @@ async function main() {
     }
   }
 
-  console.log("Démos ARÉO prêtes.");
+  console.log("Demos CLASSIC pretes (sans texte).");
+  console.log("Dynamic: npm run demos:dynamic");
 }
 
 main().catch((e) => {

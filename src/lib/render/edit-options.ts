@@ -44,6 +44,8 @@ export type TimelineTextLayer = {
   bg?: string | null;
   /** Opacité du fond 0–1 */
   bgAlpha?: number;
+  /** Italique */
+  italic?: boolean;
   /** Animation entrée/sortie (fade = défaut, glow = halo, write = bientôt) */
   anim?: "fade" | "glow" | "write";
   /** Typo cinéma luxe (majuscules + tracking) — preview + export */
@@ -119,12 +121,22 @@ export type EditorFont = {
   label: string;
   cssFamily: string;
   ffmpegPaths: string[];
+  /** Fichiers TTF italiques (export FFmpeg) */
+  italicFfmpegPaths?: string[];
   /** Look prédéfini (couleur + contour + fond) */
   defaultColor: string;
   stroke: TextStroke;
   bg: string | null;
   bgAlpha: number;
 };
+
+const ITALIC_SERIF_PATHS = [
+  "C:/Windows/Fonts/georgiai.ttf",
+  "C:/Windows/Fonts/timesi.ttf",
+  "/System/Library/Fonts/Supplemental/Georgia Italic.ttf",
+  "/System/Library/Fonts/Supplemental/Times New Roman Italic.ttf",
+  "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
+];
 
 /** 11 polices — soft serif + banger sans inclus */
 export const EDITOR_FONTS: EditorFont[] = [
@@ -203,6 +215,7 @@ export const EDITOR_FONTS: EditorFont[] = [
       "/System/Library/Fonts/Supplemental/Georgia.ttf",
       "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
     ],
+    italicFfmpegPaths: ITALIC_SERIF_PATHS,
     defaultColor: "#F7F3EB",
     stroke: "dark",
     bg: "#0A0A0A",
@@ -220,6 +233,7 @@ export const EDITOR_FONTS: EditorFont[] = [
       "/System/Library/Fonts/Supplemental/Georgia Bold.ttf",
       "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
     ],
+    italicFfmpegPaths: ITALIC_SERIF_PATHS,
     defaultColor: "#C4A574",
     stroke: "dark",
     bg: null,
@@ -234,6 +248,7 @@ export const EDITOR_FONTS: EditorFont[] = [
       "/System/Library/Fonts/Supplemental/Georgia.ttf",
       "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
     ],
+    italicFfmpegPaths: ITALIC_SERIF_PATHS,
     defaultColor: "#E8DFD0",
     stroke: "dark",
     bg: "#2A2A2C",
@@ -506,6 +521,7 @@ export type TextLayerEdit = {
   stroke?: TextStroke;
   bg?: string | null;
   bgAlpha?: number;
+  italic?: boolean;
   icon?: "whatsapp" | "pin";
   /** Typo cinéma luxe */
   look?: "cinema" | "cinema-meta";
@@ -524,6 +540,8 @@ export type RenderEditOptions = {
   /** Transitions entre plans (n-1) */
   transitions?: string[];
   textLayers?: TextLayerEdit[];
+  /** Style d’écriture choisi (indépendant du motion) */
+  writingStyleId?: string;
 };
 
 export const DURATION_PRESETS: {
@@ -675,12 +693,18 @@ export function normalizeEditOptions(
           bg,
           bgAlpha,
         };
+        if (L.italic === true) row.italic = true;
         if (icon) row.icon = icon;
         if (look) row.look = look;
         if (fadeSec != null) row.fadeSec = fadeSec;
         return [row];
       })
     : undefined;
+
+  const writingStyleId =
+    typeof o.writingStyleId === "string" && o.writingStyleId.trim()
+      ? o.writingStyleId.trim()
+      : undefined;
 
   if (
     !durationPreset &&
@@ -690,7 +714,8 @@ export function normalizeEditOptions(
     !clipDurations?.length &&
     !clipTrimStarts?.length &&
     !transitions?.length &&
-    !textLayers?.length
+    !textLayers?.length &&
+    !writingStyleId
   ) {
     return undefined;
   }
@@ -704,5 +729,6 @@ export function normalizeEditOptions(
     ...(clipTrimStarts?.length ? { clipTrimStarts } : {}),
     ...(transitions?.length ? { transitions } : {}),
     ...(textLayers?.length ? { textLayers } : {}),
+    ...(writingStyleId ? { writingStyleId } : {}),
   };
 }

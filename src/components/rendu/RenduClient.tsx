@@ -29,6 +29,7 @@ import {
   type UploadedMedia,
 } from "@/lib/storage";
 import { getRecipe } from "@/lib/render/recipes";
+import { MAX_USER_VIDEO_SEC } from "@/lib/media-limits";
 import { starterTextsForTemplate } from "@/lib/render/template-demo-texts";
 import {
   EDIT_TRANSITIONS,
@@ -37,6 +38,16 @@ import {
   type TimelineTextLayer,
 } from "@/lib/render/edit-options";
 import { engineForTemplate } from "@/lib/render/engine";
+import {
+  buildCinemaTextLayers,
+  cinemaTransitions,
+  getCinemaStyle,
+} from "@/lib/dynamic/cinema";
+import { loadWritingStyleId } from "@/lib/writing/session";
+import {
+  loadPropertyListing,
+  propertyHasContent,
+} from "@/lib/dynamic/property";
 
 type RenduClientProps = {
   templateId: string;
@@ -139,16 +150,67 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
           size: m.size,
           previewUrl: urlByPath.get(m.path) ?? m.previewUrl,
           duration:
-            m.kind === "video" ? recipe.videoMaxSeconds : recipe.imageSeconds,
+            m.kind === "video" ? MAX_USER_VIDEO_SEC : recipe.imageSeconds,
         }));
 
         const nextTransitions = nextClips
           .slice(0, -1)
-          .map(() => defaultTransition);
+          .map((_, i) => {
+            if (engineForTemplate(templateId) === "veo-fast") {
+              const cinema = getCinemaStyle(templateId);
+              const list = cinemaTransitions(
+                templateId,
+                nextClips.length - 1,
+              );
+              return (
+                EDIT_TRANSITIONS.find((t) => t.id === list[i])?.id ??
+                cinema.transitions[0] ??
+                defaultTransition
+              );
+            }
+            return defaultTransition;
+          });
 
         setClips(nextClips);
         setTransitions(nextTransitions);
-        const starters = starterTextsForTemplate(templateId, nextClips);
+
+        const property = loadPropertyListing();
+        const writingId = loadWritingStyleId();
+        let starters: TimelineTextLayer[];
+        if (property && propertyHasContent(property)) {
+          const fade =
+            engineForTemplate(templateId) === "veo-fast"
+              ? getCinemaStyle(templateId).fadeSeconds
+              : recipe.fadeSeconds;
+          const layers = buildCinemaTextLayers(
+            property,
+            nextClips.length,
+            recipe.imageSeconds,
+            fade,
+            templateId,
+            writingId,
+            nextClips.map((c) => c.duration),
+          );
+          starters = layers.map((L) => ({
+            id: newId("txt"),
+            content: L.content,
+            fontId: L.fontId,
+            start: L.start,
+            duration: L.duration,
+            x: L.x,
+            y: L.y,
+            scale: L.scale,
+            color: L.color,
+            stroke: L.stroke,
+            bg: L.bg ?? null,
+            bgAlpha: L.bgAlpha ?? 0,
+            look: L.look,
+            fadeSec: L.fadeSec,
+            lane: (L.y ?? 0.8) < 0.5 ? 0 : 1,
+          }));
+        } else {
+          starters = starterTextsForTemplate(templateId, nextClips);
+        }
         setTexts(starters);
         setExportedKey(
           hasResult

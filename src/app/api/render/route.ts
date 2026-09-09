@@ -15,12 +15,17 @@ import {
   MAX_SAVED_VIDEOS_PER_ACCOUNT,
 } from "@/lib/video-retention";
 import { getTemplateById } from "@/data/templates";
-import { MAX_MEDIAS_PER_VIDEO } from "@/lib/media-limits";
+import {
+  MAX_MEDIAS_PER_VIDEO,
+  MAX_VIDEOS_PER_MONTAGE,
+  MEDIA_LIMITS_COPY,
+  validateMediaSelection,
+} from "@/lib/media-limits";
 import { engineForTemplate } from "@/lib/render/engine";
 import { normalizeProperty } from "@/lib/dynamic/property";
 
 export const runtime = "nodejs";
-/** Veo Fast : ~30–90s / photo — laisse assez de marge pour 10–12 médias. */
+/** Veo Lite : marge pour jusqu'a 12 photos en parallele. */
 export const maxDuration = 800;
 
 type MediaPayload = {
@@ -62,7 +67,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Aucun média." }, { status: 400 });
     }
 
-    // DYNAMIC generate → Veo ; polish / CLASSIC → FFmpeg
+    // Garde-fou photos uniquement à la génération (polish = clips déjà montés)
+    if (mode === "generate") {
+      const mediaError = validateMediaSelection(medias);
+      if (mediaError) {
+        return NextResponse.json({ error: mediaError }, { status: 400 });
+      }
+    }
+
+    const videoCount = medias.filter((m) => m.kind === "video").length;
+    if (mode === "generate" && videoCount > MAX_VIDEOS_PER_MONTAGE) {
+      return NextResponse.json(
+        { error: MEDIA_LIMITS_COPY.noVideo },
+        { status: 400 },
+      );
+    }
+
+    // DYNAMIC generate → Veo (photos) ; videos = effets FFmpeg ; polish / CLASSIC → FFmpeg
     const engine =
       mode === "polish" ? "ffmpeg" : engineForTemplate(templateId);
 

@@ -59,6 +59,16 @@ export type Messages = {
     categoryClassic: string;
     names: Record<string, string>;
   };
+  writing: {
+    step: string;
+    title: string;
+    hint: string;
+    continue: string;
+    pacingCascade: string;
+    pacingSequential: string;
+    pacingSimultaneous: string;
+    names: Record<string, string>;
+  };
   media: {
     step: string;
     title: string;
@@ -182,20 +192,40 @@ export const fr: Messages = {
       "restaurant-chic": "Restaurant Chic",
     },
   },
-  media: {
+  writing: {
     step: "Étape 2",
+    title: "Textes",
+    hint: "Style, aperçu et ordre — en même temps.",
+    continue: "Générer",
+    pacingCascade: "Cascade",
+    pacingSequential: "Un après l’autre",
+    pacingSimultaneous: "Tout ensemble",
+    names: {
+      editorial: "Éditorial",
+      italic: "Italique",
+      snap: "Snap",
+      prestige: "Prestige",
+      impact: "Impact",
+      warm: "Chaleureux",
+      punch: "Punch",
+      slim: "Condensé",
+      amber: "Ambre",
+      clean: "Clean",
+    },
+  },
+  media: {
+    step: "Étape 1",
     title: "Médias",
-    hint: "Ajoutez photos et vidéos de votre bien.",
-    hintDynamic:
-      "Conseil : ordonnez extérieur → pièces → vue (glisser ou flèches).",
-    dropTitle: "Déposez vos fichiers",
-    dropHint: "Photos ou vidéos — jusqu’à 12",
+    hint: "4 a 12 photos",
+    hintDynamic: "4–12 photos — cinema IA Veo Lite, reel 8–12 s.",
+    dropTitle: "Déposez vos photos",
+    dropHint: "JPG, PNG, HEIC…",
     browse: "Parcourir",
     addMore: "Ajouter",
-    continueEdit: "Continuer vers l’édition",
+    continueEdit: "Continuer",
     preparing: "Préparation…",
     uploading: "Envoi des médias…",
-    openingEditor: "Ouverture de l’éditeur…",
+    openingEditor: "Ouverture…",
     reorder: "Réordonner",
     moveEarlier: "Monter",
     moveLater: "Descendre",
@@ -306,20 +336,40 @@ export const en: Messages = {
       "restaurant-chic": "Chic Restaurant",
     },
   },
-  media: {
+  writing: {
     step: "Step 2",
+    title: "Text",
+    hint: "Style, live preview and order — together.",
+    continue: "Generate",
+    pacingCascade: "Cascade",
+    pacingSequential: "One after another",
+    pacingSimultaneous: "All together",
+    names: {
+      editorial: "Editorial",
+      italic: "Italic",
+      snap: "Snap",
+      prestige: "Prestige",
+      impact: "Impact",
+      warm: "Warm",
+      punch: "Punch",
+      slim: "Condensed",
+      amber: "Amber",
+      clean: "Clean",
+    },
+  },
+  media: {
+    step: "Step 1",
     title: "Media",
-    hint: "Add photos and videos of your property.",
-    hintDynamic:
-      "Tip: order exterior → rooms → view (drag or arrows).",
-    dropTitle: "Drop your files",
-    dropHint: "Photos or videos — up to 12",
+    hint: "4 to 12 photos",
+    hintDynamic: "4–12 photos — Veo Lite AI cinema, 8–12 s reel.",
+    dropTitle: "Drop your photos",
+    dropHint: "JPG, PNG, HEIC…",
     browse: "Browse",
     addMore: "Add",
-    continueEdit: "Continue to editing",
+    continueEdit: "Continue",
     preparing: "Preparing…",
     uploading: "Uploading media…",
-    openingEditor: "Opening editor…",
+    openingEditor: "Opening…",
     reorder: "Reorder",
     moveEarlier: "Move up",
     moveLater: "Move down",

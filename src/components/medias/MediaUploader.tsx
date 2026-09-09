@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Plus, Trash2, Film, FileImage, ChevronLeft, ChevronRight } from "lucide-react";
+import { ImagePlus, Plus, Trash2, Film, FileImage } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import {
@@ -15,14 +15,17 @@ import {
 } from "@/lib/storage";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
-  MAX_MEDIAS_PER_VIDEO,
+  MAX_PHOTOS_PER_REEL,
   MEDIA_LIMITS_COPY,
+  MIN_PHOTOS_PER_REEL,
+  countMediaKinds,
+  validateMediaSelection,
 } from "@/lib/media-limits";
 import { RenderWaitingOverlay } from "@/components/medias/RenderWaitingOverlay";
 import { useT } from "@/components/i18n/I18nProvider";
 
 const ACCEPT =
-  "image/*,video/*,.heic,.heif,.webp,.avif,.jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff,.mp4,.mov,.m4v,.webm,.avi,.mkv";
+  "image/*,.heic,.heif,.webp,.avif,.jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff";
 
 type MediaItem = {
   id: string;
@@ -32,13 +35,14 @@ type MediaItem = {
   previewUrl: string;
   kind: "image" | "video" | "other";
   revokeOnRemove: boolean;
+  durationSec?: number;
 };
 
 type MediaUploaderProps = {
   templateId: string;
   /** Recharge la session (flux Refaire) */
   restoreSession?: boolean;
-  /** classic → CapCut ; dynamic → infos → génération cinéma */
+  /** classic → CapCut ; dynamic → infos → generation cinema */
   flow?: "classic" | "dynamic";
 };
 
@@ -104,44 +108,58 @@ export function MediaUploader({
     setHydrated(true);
   }, [restoreSession, templateId]);
 
-  const remaining = MAX_MEDIAS_PER_VIDEO - items.length;
-  const atLimit = remaining <= 0;
+  const { photos: photoCount } = countMediaKinds(items);
+  const canAddPhoto = photoCount < MAX_PHOTOS_PER_REEL;
+  const atLimit = !canAddPhoto;
+  const selectionError = validateMediaSelection(items);
+  const canContinue = !selectionError;
 
-  const addFiles = useCallback((fileList: FileList | File[]) => {
+  const addFiles = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
     if (!files.length) return;
 
-    setItems((prev) => {
-      const slots = MAX_MEDIAS_PER_VIDEO - prev.length;
-      if (slots <= 0) {
-        setError(MEDIA_LIMITS_COPY.full);
-        return prev;
+    let photosLeft =
+      MAX_PHOTOS_PER_REEL - items.filter((i) => i.kind === "image").length;
+
+    if (photosLeft <= 0) {
+      setError(MEDIA_LIMITS_COPY.tooManyPhotos);
+      return;
+    }
+
+    const accepted: MediaItem[] = [];
+    const messages: string[] = [];
+
+    for (const file of files) {
+      const kind = detectKind(file);
+      if (kind === "video") {
+        messages.push(MEDIA_LIMITS_COPY.noVideo);
+        continue;
+      }
+      if (kind === "other") {
+        messages.push(`${file.name} : format non supporté.`);
+        continue;
+      }
+      if (photosLeft <= 0) {
+        messages.push(MEDIA_LIMITS_COPY.tooManyPhotos);
+        continue;
       }
 
-      const accepted = files.slice(0, slots);
-      const next: MediaItem[] = accepted.map((file) => {
-        const kind = detectKind(file);
-        return {
-          id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 7)}`,
-          file,
-          name: file.name,
-          previewUrl: kind === "other" ? "" : URL.createObjectURL(file),
-          kind,
-          revokeOnRemove: true,
-        };
+      accepted.push({
+        id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 7)}`,
+        file,
+        name: file.name,
+        previewUrl: URL.createObjectURL(file),
+        kind: "image",
+        revokeOnRemove: true,
       });
+      photosLeft -= 1;
+    }
 
-      if (files.length > slots) {
-        setError(
-          `${MEDIA_LIMITS_COPY.full} ${slots} ajouté${slots > 1 ? "s" : ""}, ${files.length - slots} ignoré${files.length - slots > 1 ? "s" : ""}.`,
-        );
-      } else {
-        setError(null);
-      }
-
-      return [...prev, ...next];
-    });
-  }, []);
+    if (accepted.length) {
+      setItems((prev) => [...prev, ...accepted]);
+    }
+    setError(messages.length ? messages[0] : null);
+  }, [items]);
 
   const removeItem = (id: string) => {
     setItems((prev) => {
@@ -182,7 +200,12 @@ export function MediaUploader({
   };
 
   const handleContinue = async () => {
-    if (!items.length || working) return;
+    if (working) return;
+    const invalid = validateMediaSelection(items);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
 
     if (!isSupabaseConfigured()) {
       setError("Supabase non configuré (.env.local).");
@@ -230,7 +253,7 @@ export function MediaUploader({
         throw new Error("Aucun média valide.");
       }
 
-  // DYNAMIC : infos bien → génération cinéma. CLASSIC : éditeur CapCut.
+      // Même parcours DYNAMIC / CLASSIC : écriture → textes → timeline
       clearRenderSession();
       saveUploadSession({
         templateId,
@@ -238,17 +261,10 @@ export function MediaUploader({
         createdAt: new Date().toISOString(),
       });
 
-      if (flow === "dynamic") {
-        setWaitStatus("Ouverture des infos…");
-        setWaitProgress(100);
-        await new Promise((r) => setTimeout(r, 400));
-        router.push(`/creer/infos?template=${templateId}`);
-      } else {
-        setWaitStatus(t.media.openingEditor);
-        setWaitProgress(100);
-        await new Promise((r) => setTimeout(r, 400));
-        router.push(`/creer/rendu?template=${templateId}`);
-      }
+      setWaitStatus(t.media.openingEditor);
+      setWaitProgress(100);
+      await new Promise((r) => setTimeout(r, 400));
+      router.push(`/creer/infos?template=${templateId}`);
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Échec de l’envoi.";
@@ -279,7 +295,7 @@ export function MediaUploader({
       e.preventDefault();
       setDragging(false);
       if (atLimit || working) return;
-      if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+      if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
     },
   };
 
@@ -301,7 +317,7 @@ export function MediaUploader({
           {t.media.title}
         </h2>
         <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted">
-          {flow === "dynamic" ? t.media.hintDynamic : t.media.hint}
+          {t.media.hint}
         </p>
       </div>
 
@@ -314,7 +330,7 @@ export function MediaUploader({
           className="hidden"
           disabled={working || atLimit}
           onChange={(e) => {
-            if (e.target.files) addFiles(e.target.files);
+            if (e.target.files) void addFiles(e.target.files);
             e.target.value = "";
           }}
         />
@@ -335,22 +351,22 @@ export function MediaUploader({
           >
             <div
               className={cn(
-                "flex size-16 items-center justify-center rounded-2xl border transition-colors",
+                "flex size-20 items-center justify-center rounded-2xl border transition-colors",
                 dragging
                   ? "border-gold/50 bg-gold/20 text-gold"
                   : "border-white/12 bg-white/[0.04] text-pearl",
               )}
             >
-              <Plus className="size-8" strokeWidth={1.5} />
+              <Plus className="size-10" strokeWidth={1.5} />
             </div>
-            <p className="mt-5 text-[15px] font-medium tracking-wide text-pearl">
+            <p className="mt-5 text-[19px] font-medium tracking-wide text-pearl sm:text-[21px]">
               {t.media.dropTitle}
             </p>
             <p className="mt-2 max-w-[220px] text-center text-[12px] leading-relaxed text-muted">
               {t.media.dropHint}
             </p>
-            <span className="mt-6 inline-flex items-center gap-1.5 text-[11px] tracking-[0.14em] text-muted-strong uppercase">
-              <ImagePlus className="size-3.5" strokeWidth={1.75} />
+            <span className="mt-6 inline-flex items-center gap-2 text-[13px] tracking-[0.14em] text-muted-strong uppercase sm:text-[14px]">
+              <ImagePlus className="size-5" strokeWidth={1.75} />
               {t.media.browse}
             </span>
           </button>
@@ -358,8 +374,13 @@ export function MediaUploader({
           /* État rempli : grille — « + » fixe en case 1, médias ensuite */
           <div {...dropHandlers}>
             <p className="mb-3 text-[12px] tracking-wide text-muted">
-              {items.length}/{MAX_MEDIAS_PER_VIDEO} média
-              {items.length > 1 ? "s" : ""}
+              {photoCount}/{MAX_PHOTOS_PER_REEL} photos
+              {photoCount < MIN_PHOTOS_PER_REEL ? (
+                <span className="text-gold">
+                  {" "}
+                  · encore {MIN_PHOTOS_PER_REEL - photoCount}
+                </span>
+              ) : null}
               {items.length > 1 ? (
                 <span className="text-muted-strong">
                   {" "}
@@ -383,7 +404,7 @@ export function MediaUploader({
                   )}
                   aria-label={
                     atLimit
-                      ? `Limite de ${MAX_MEDIAS_PER_VIDEO} médias atteinte`
+                      ? `Limite atteinte (${MAX_PHOTOS_PER_REEL} photos max)`
                       : "Ajouter encore"
                   }
                 >
@@ -434,26 +455,6 @@ export function MediaUploader({
                   <span className="absolute bottom-1.5 left-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm">
                     {index + 1}
                   </span>
-                  <div className="absolute top-1.5 left-1.5 z-10 flex gap-0.5">
-                    <button
-                      type="button"
-                      disabled={working || index === 0}
-                      onClick={() => moveItem(index, index - 1)}
-                      className="flex size-8 touch-manipulation items-center justify-center rounded-full border border-white/15 bg-black/55 text-white disabled:opacity-30"
-                      aria-label={t.media.moveEarlier}
-                    >
-                      <ChevronLeft className="size-3.5" strokeWidth={2} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={working || index === items.length - 1}
-                      onClick={() => moveItem(index, index + 1)}
-                      className="flex size-8 touch-manipulation items-center justify-center rounded-full border border-white/15 bg-black/55 text-white disabled:opacity-30"
-                      aria-label={t.media.moveLater}
-                    >
-                      <ChevronRight className="size-3.5" strokeWidth={2} />
-                    </button>
-                  </div>
                   <button
                     type="button"
                     disabled={working}
@@ -473,6 +474,10 @@ export function MediaUploader({
           <p className="mt-4 text-center text-[13px] text-red-400" role="alert">
             {error}
           </p>
+        ) : selectionError && items.length > 0 ? (
+          <p className="mt-4 text-center text-[13px] text-muted" role="status">
+            {selectionError}
+          </p>
         ) : null}
       </div>
 
@@ -481,10 +486,10 @@ export function MediaUploader({
           <Button
             fullWidth
             className="sm:w-auto sm:min-w-[220px]"
-            variant={items.length ? "gold" : "primary"}
-            disabled={!items.length || working}
+            variant={canContinue ? "gold" : "primary"}
+            disabled={!canContinue || working}
             showArrow={!working}
-            onClick={handleContinue}
+            onClick={() => void handleContinue()}
           >
             {flow === "dynamic" ? "Continuer" : t.media.continueEdit}
           </Button>

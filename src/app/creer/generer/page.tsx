@@ -2,6 +2,7 @@ import { Header } from "@/components/layout/Header";
 import { AppShell } from "@/components/layout/AppShell";
 import { DynamicGenerateClient } from "@/components/dynamic/DynamicGenerateClient";
 import { getTemplateById } from "@/data/templates";
+import { DEFAULT_TEMPLATE_ID } from "@/lib/product";
 import { redirect } from "next/navigation";
 
 type GenererPageProps = {
@@ -9,23 +10,22 @@ type GenererPageProps = {
 };
 
 export const metadata = {
-  title: "Génération cinéma — ARÉO",
-  description: "Génération de votre Reel immobilier cinéma.",
+  title: "Génération — ARÉO",
+  description: "Génération de votre Reel immobilier.",
 };
 
 export default async function GenererPage({ searchParams }: GenererPageProps) {
   const params = await searchParams;
-  const template = params.template
-    ? getTemplateById(params.template)
-    : undefined;
+  const templateId = params.template ?? DEFAULT_TEMPLATE_ID;
+  const template = getTemplateById(templateId) ?? getTemplateById(DEFAULT_TEMPLATE_ID);
 
-  if (!params.template || !template || template.category !== "dynamic") {
-    redirect("/creer");
+  if (!template || template.category !== "dynamic") {
+    redirect(`/creer/medias?template=${DEFAULT_TEMPLATE_ID}`);
   }
 
   return (
     <AppShell contained>
-      <Header showBack={false} stepLabel="4 / 4" />
+      <Header showBack={false} stepLabel="3 / 4" />
       <main className="flex flex-1 flex-col">
         <DynamicGenerateClient templateId={template.id} />
       </main>

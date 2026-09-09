@@ -41,9 +41,9 @@ export function Hero() {
           <source src="/hero-bg.mp4" type="video/mp4" />
         </video>
 
-        <div className="absolute inset-0 bg-black/45" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/40 to-background" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.55)_100%)]" />
+        <div className="absolute inset-0 bg-black/28" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/22 to-background" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.35)_100%)]" />
       </div>
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16 pt-8 text-center sm:px-10">

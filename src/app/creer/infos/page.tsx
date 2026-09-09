@@ -1,7 +1,8 @@
 import { Header } from "@/components/layout/Header";
 import { AppShell } from "@/components/layout/AppShell";
-import { PropertyInfoForm } from "@/components/dynamic/PropertyInfoForm";
+import { TextStudio } from "@/components/dynamic/TextStudio";
 import { getTemplateById } from "@/data/templates";
+import { DEFAULT_TEMPLATE_ID } from "@/lib/product";
 import { redirect } from "next/navigation";
 
 type InfosPageProps = {
@@ -9,18 +10,17 @@ type InfosPageProps = {
 };
 
 export const metadata = {
-  title: "Infos du bien — ARÉO",
-  description: "Textes cinéma pour votre Reel DYNAMIC.",
+  title: "Textes — ARÉO",
+  description: "Style d’écriture et textes de votre vidéo immobilière.",
 };
 
 export default async function InfosPage({ searchParams }: InfosPageProps) {
   const params = await searchParams;
-  const template = params.template
-    ? getTemplateById(params.template)
-    : undefined;
+  const templateId = params.template ?? DEFAULT_TEMPLATE_ID;
+  const template = getTemplateById(templateId) ?? getTemplateById(DEFAULT_TEMPLATE_ID);
 
-  if (!params.template || !template || template.category !== "dynamic") {
-    redirect("/creer");
+  if (!template) {
+    redirect(`/creer/medias?template=${DEFAULT_TEMPLATE_ID}`);
   }
 
   return (
@@ -28,10 +28,10 @@ export default async function InfosPage({ searchParams }: InfosPageProps) {
       <Header
         showBack
         backHref={`/creer/medias?template=${template.id}`}
-        stepLabel="3 / 4"
+        stepLabel="2 / 4"
       />
       <main className="flex flex-1 flex-col">
-        <PropertyInfoForm templateId={template.id} />
+        <TextStudio templateId={template.id} />
       </main>
     </AppShell>
   );

@@ -15,11 +15,20 @@ import {
   type TextLayerEdit,
 } from "./edit-options";
 import { getRecipe, type RenderRecipe } from "./recipes";
-import { MAX_MEDIAS_PER_VIDEO } from "@/lib/media-limits";
+import { MAX_MEDIAS_PER_VIDEO, MAX_USER_VIDEO_SEC } from "@/lib/media-limits";
+import {
+  MAX_VEO_PHOTOS_PER_REEL,
+  TARGET_REEL_SECONDS,
+  targetReelSecondsForCount,
+} from "@/lib/product";
+import {
+  computeEqualClipDurations,
+  veoApiDurationForSlot,
+  veoApiSeconds,
+} from "@/lib/render/reel-timing";
 import {
   downloadVeoVideoToFile,
   generateVeoClipFromImage,
-  VEO_CLIP_SECONDS,
 } from "@/lib/ai/veo";
 import { uploadLocalImageToFal } from "@/lib/ai/fal";
 import {
@@ -197,7 +206,7 @@ async function imageToClip(
   index: number,
   durationSec: number,
 ): Promise<number> {
-  const duration = Math.max(1.1, Math.min(8, durationSec));
+  const duration = Math.max(0.9, Math.min(TARGET_REEL_SECONDS + 0.5, durationSec));
   await runFfmpeg([
     "-y",
     "-loop",
@@ -266,6 +275,47 @@ async function videoToClip(
   return duration;
 }
 
+/** Ralentit une source courte pour remplir la durée cible (ex. 1 video → 15 s). */
+async function stretchVideoToClip(
+  input: string,
+  output: string,
+  recipe: RenderRecipe,
+  sourceSec: number,
+  targetSec: number,
+): Promise<number> {
+  const src = Math.max(0.5, sourceSec);
+  const target = Math.max(src, Math.min(TARGET_REEL_SECONDS + 0.5, targetSec));
+  const factor = target / src;
+  const vf =
+    `setpts=${factor.toFixed(4)}*PTS,` +
+    `${coverScale()},` +
+    `fps=${FPS},` +
+    gradeFilter(recipe);
+
+  await runFfmpeg([
+    "-y",
+    "-i",
+    input,
+    "-t",
+    String(target),
+    "-vf",
+    vf,
+    "-r",
+    String(FPS),
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "20",
+    "-pix_fmt",
+    "yuv420p",
+    "-an",
+    output,
+  ]);
+  return target;
+}
+
 function resolveFontCandidate(file: string): string | null {
   const candidates = path.isAbsolute(file)
     ? [file]
@@ -287,10 +337,14 @@ function resolveFontCandidate(file: string): string | null {
   return null;
 }
 
-function resolveDrawtextFont(fontId = "sans"): string | null {
+function resolveDrawtextFont(fontId = "sans", italic = false): string | null {
   const font = getFont(fontId);
+  const preferred =
+    italic && font.italicFfmpegPaths?.length
+      ? [...font.italicFfmpegPaths, ...font.ffmpegPaths]
+      : font.ffmpegPaths;
   const candidates = [
-    ...font.ffmpegPaths,
+    ...preferred,
     "public/fonts/SegoeUI-Bold.ttf",
     "public/fonts/Arial-Bold.ttf",
     "public/fonts/Georgia-Bold.ttf",
@@ -422,7 +476,7 @@ async function burnTextOverlays(
     }
     textContent = escapeDrawtext(textContent);
 
-    const font = resolveDrawtextFont(layer.fontId);
+    const font = resolveDrawtextFont(layer.fontId, layer.italic === true);
     const fontPart = font ? `fontfile=${font}:` : "";
     const iconPx = Math.round(fontsize * 0.88);
     const gap = Math.round(12 * scale);
@@ -679,7 +733,7 @@ export async function buildSlideshowMp4(
           media.localPath,
           clipPath,
           recipe,
-          overrideDuration ?? recipe.videoMaxSeconds,
+          overrideDuration ?? MAX_USER_VIDEO_SEC,
           trimStart,
         );
       } else {
@@ -823,35 +877,75 @@ export async function buildVeoReelMp4(
       base.singleShot ? medias.slice(0, 1) : medias
     ).slice(0, MAX_MEDIAS_PER_VIDEO);
 
-    // Veo en parallèle = durée ~ max(clip) au lieu de la somme
+    const reelTarget = targetReelSecondsForCount(
+      limited.length,
+      recipe.fadeSeconds,
+    );
+    const slotDurations = computeEqualClipDurations(
+      limited.length,
+      recipe.fadeSeconds,
+      reelTarget,
+    );
+
+    // Photos Veo en parallèle (plafond coût), reste = Ken Burns
+    let veoBudget = MAX_VEO_PHOTOS_PER_REEL;
+    const plan = limited.map((media, i) => {
+      const slot = slotDurations[i] ?? 2;
+      if (media.kind === "video") {
+        return { media, i, slot, engine: "video" as const };
+      }
+      if (veoBudget > 0) {
+        veoBudget -= 1;
+        return { media, i, slot, engine: "veo" as const };
+      }
+      return { media, i, slot, engine: "kenburns" as const };
+    });
+
     const clips = await Promise.all(
-      limited.map(async (media, i) => {
+      plan.map(async ({ media, i, slot, engine }) => {
         const clipPath = path.join(
           workDir,
           `clip-${String(i).padStart(3, "0")}.mp4`,
         );
 
-        if (media.kind === "video") {
+        if (engine === "video") {
           const overrideDuration = edits?.clipDurations?.[i];
           const trimStart = edits?.clipTrimStarts?.[i] ?? 0;
           const duration = await videoToClip(
             media.localPath,
             clipPath,
             recipe,
-            overrideDuration ?? recipe.videoMaxSeconds,
+            overrideDuration ?? Math.min(slot, MAX_USER_VIDEO_SEC),
             trimStart,
           );
           return { path: clipPath, duration };
         }
 
+        if (engine === "kenburns") {
+          console.log(
+            `[veo-reel] clip ${i + 1}/${limited.length} — Ken Burns (${slot.toFixed(1)}s)…`,
+          );
+          const duration = await imageToClip(
+            media.localPath,
+            clipPath,
+            recipe,
+            i,
+            edits?.clipDurations?.[i] ?? slot,
+          );
+          return { path: clipPath, duration };
+        }
+
+        const apiDur = veoApiDurationForSlot(slot);
+        const apiSec = veoApiSeconds(apiDur);
         console.log(
-          `[veo-reel] clip ${i + 1}/${limited.length} — Veo Fast (parallèle)…`,
+          `[veo-reel] clip ${i + 1}/${limited.length} — Veo Fast ${apiDur} → ${slot.toFixed(1)}s…`,
         );
         const imageUrl = await uploadLocalImageToFal(media.localPath);
         const { videoUrl, requestId } = await generateVeoClipFromImage({
           imageUrl,
           prompt: cinemaMotionPrompt(templateId, i),
           negativePrompt: cinemaNegative(templateId),
+          duration: apiDur,
         });
         console.log(`[veo-reel] requestId ${requestId}`);
 
@@ -861,13 +955,23 @@ export async function buildVeoReelMp4(
         );
         await downloadVeoVideoToFile(videoUrl, rawPath);
 
-        const duration = await videoToClip(
-          rawPath,
-          clipPath,
-          recipe,
-          VEO_CLIP_SECONDS,
-          0,
-        );
+        const targetSec = edits?.clipDurations?.[i] ?? slot;
+        const duration =
+          targetSec > apiSec + 0.2
+            ? await stretchVideoToClip(
+                rawPath,
+                clipPath,
+                recipe,
+                apiSec,
+                targetSec,
+              )
+            : await videoToClip(
+                rawPath,
+                clipPath,
+                recipe,
+                Math.min(targetSec, apiSec),
+                0,
+              );
         return { path: clipPath, duration };
       }),
     );
@@ -936,9 +1040,11 @@ export async function buildVeoReelMp4(
       layers = buildCinemaTextLayers(
         listing,
         clips.length,
-        VEO_CLIP_SECONDS,
+        clips[0]?.duration ?? 4,
         recipe.fadeSeconds,
         templateId,
+        edits?.writingStyleId,
+        clips.map((c) => c.duration),
       );
     }
 

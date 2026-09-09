@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { saveUploadSession, type UploadedMedia } from "@/lib/storage";
 import { downloadFile } from "@/lib/download";
+import { DEFAULT_TEMPLATE_ID } from "@/lib/product";
 
 type VideoLibraryProps = {
   videos: LibraryVideo[];
@@ -159,7 +160,7 @@ export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
         createdAt: new Date().toISOString(),
       });
 
-      router.push(`/creer/medias?template=${data.templateId}&refaire=1`);
+      router.push(`/creer/medias?template=${DEFAULT_TEMPLATE_ID}&refaire=1`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur Refaire.");
       setBusy(null);

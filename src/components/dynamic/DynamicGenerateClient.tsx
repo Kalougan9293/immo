@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RenderWaitingOverlay } from "@/components/medias/RenderWaitingOverlay";
 import { loadPropertyListing } from "@/lib/dynamic/property";
+import { loadWritingStyleId } from "@/lib/writing/session";
 import {
   AREO_MEDIA_BUCKET,
   loadUploadSession,
@@ -32,6 +33,7 @@ export function DynamicGenerateClient({
 
     const upload = loadUploadSession();
     const property = loadPropertyListing();
+    const writingStyleId = loadWritingStyleId();
 
     if (!upload || upload.templateId !== templateId || !upload.medias.length) {
       router.replace(`/creer/medias?template=${templateId}`);
@@ -72,8 +74,7 @@ export function DynamicGenerateClient({
             templateId,
             medias: upload.medias,
             property,
-            // Pas d’edits CapCut — textes cinéma depuis property
-            edits: {},
+            edits: writingStyleId ? { writingStyleId } : {},
           }),
         });
 

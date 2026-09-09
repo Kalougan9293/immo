@@ -1,19 +1,12 @@
-﻿import { Header } from "@/components/layout/Header";
-import { AppShell } from "@/components/layout/AppShell";
-import { TemplateSelector } from "@/components/templates/TemplateSelector";
+﻿import { redirect } from "next/navigation";
+import { DEFAULT_TEMPLATE_ID } from "@/lib/product";
 
 export const metadata = {
-  title: "Choisir un modèle — ARÉO",
-  description: "Sélectionnez le template vidéo immobilier qui correspond à votre bien.",
+  title: "Créer — ARÉO",
+  description: "Importez vos photos pour générer votre Reel immobilier.",
 };
 
+/** Plus de choix de modèle — entrée directe aux médias. */
 export default function CreerPage() {
-  return (
-    <AppShell contained>
-      <Header showBack backHref="/" stepLabel="1 / 3" />
-      <main className="flex flex-1 flex-col">
-        <TemplateSelector />
-      </main>
-    </AppShell>
-  );
+  redirect(`/creer/medias?template=${DEFAULT_TEMPLATE_ID}`);
 }

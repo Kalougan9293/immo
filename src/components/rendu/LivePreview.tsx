@@ -131,6 +131,7 @@ function textVisualStyle(layer: TimelineTextLayer): React.CSSProperties {
 
   return {
     fontFamily: getFont(layer.fontId).cssFamily,
+    fontStyle: layer.italic ? ("italic" as const) : undefined,
     fontSize: `${Math.round((isBanger ? 16.5 : isCinema ? 16.2 : 15.5) * scale)}px`,
     fontWeight: isBanger || layer.fontId === "modern" ? 900 : isSoft ? 500 : 600,
     letterSpacing: isCinema

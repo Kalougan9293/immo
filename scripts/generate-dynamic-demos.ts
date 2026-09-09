@@ -1,37 +1,26 @@
 /**
- * Démos DYNAMIC = vrai pipeline ARÉO (Veo Fast + FFmpeg + textes cinéma).
- * Même set de photos × 3 styles → l’aperçu = le rendu produit.
- *
+ * Démos DYNAMIC Veo — sans texte (motion uniquement).
  * Usage:
  *   npx tsx scripts/generate-dynamic-demos.ts
- *   npx tsx scripts/generate-dynamic-demos.ts dynamic-pulse
+ *   npx tsx scripts/generate-dynamic-demos.ts dynamic-marina
  *
- * Coût approx. : 3 modèles × 3 photos × 4s × $0.10 ≈ $3.60
+ * Cout approx. : 3 modeles × 3 photos × 4s × $0.10 ≈ $3.60
  */
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import type { TemplateId } from "../src/data/templates";
-import type { PropertyListing } from "../src/lib/dynamic/property";
 
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, "public", "templates", "demos");
 const COVERS = path.join(ROOT, "public", "templates");
 
-/** Photos partagées — la différence vient uniquement du style cinéma. */
+/** Photos partagees — la difference vient uniquement du style cinema. */
 const SHARED_PHOTOS = [
   "public/templates/demo-sources/paris/01.jpg",
   "public/templates/demo-sources/paris/02.jpg",
   "public/templates/demo-sources/paris/04.jpg",
 ];
-
-const DEMO_PROPERTY: PropertyListing = {
-  titleLine1: "Paris",
-  titleLine2: "16ème",
-  specs: "3 pièces · 85 m²",
-  highlight: "Exclusivité",
-  cta: "Contactez-nous",
-};
 
 const JOBS: {
   id: TemplateId;
@@ -44,24 +33,9 @@ const JOBS: {
     cover: "dynamic.jpg",
   },
   {
-    id: "dynamic-pulse",
-    file: "dynamic-pulse.mp4",
-    cover: "dynamic-pulse.jpg",
-  },
-  {
     id: "dynamic-marina",
     file: "dynamic-marina.mp4",
     cover: "dynamic-marina.jpg",
-  },
-  {
-    id: "dynamic-noir",
-    file: "dynamic-noir.mp4",
-    cover: "dynamic-noir.jpg",
-  },
-  {
-    id: "dynamic-bold",
-    file: "dynamic-bold.mp4",
-    cover: "dynamic-bold.jpg",
   },
   {
     id: "dynamic-warm",
@@ -163,7 +137,7 @@ async function main() {
       medias,
       job.id,
       undefined,
-      DEMO_PROPERTY,
+      null, // aperçu motion sans texte
     );
     console.timeEnd(job.id);
 

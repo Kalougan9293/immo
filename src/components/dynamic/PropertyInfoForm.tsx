@@ -9,14 +9,17 @@ import {
   savePropertyListing,
   type PropertyListing,
 } from "@/lib/dynamic/property";
+import { getTemplateById } from "@/data/templates";
 import { loadUploadSession } from "@/lib/storage";
+import { loadWritingStyle } from "@/lib/writing/session";
+import { getFont } from "@/lib/render/edit-options";
 
 type PropertyInfoFormProps = {
   templateId: string;
 };
 
 const FIELDS: {
-  key: keyof PropertyListing;
+  key: "titleLine1" | "titleLine2" | "specs" | "highlight" | "cta";
   label: string;
   placeholder: string;
   hint?: string;
@@ -25,7 +28,7 @@ const FIELDS: {
     key: "titleLine1",
     label: "Titre — ligne 1",
     placeholder: "Banlieue",
-    hint: "Grand titre centré, style cinéma",
+    hint: "Grand titre",
   },
   {
     key: "titleLine2",
@@ -54,6 +57,10 @@ export function PropertyInfoForm({ templateId }: PropertyInfoFormProps) {
   const [listing, setListing] = useState<PropertyListing>(EMPTY_PROPERTY);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fontFamily, setFontFamily] = useState("inherit");
+  const [fontLabel, setFontLabel] = useState("");
+  const template = getTemplateById(templateId);
+  const isDynamic = template?.category === "dynamic";
 
   useEffect(() => {
     const upload = loadUploadSession();
@@ -63,6 +70,10 @@ export function PropertyInfoForm({ templateId }: PropertyInfoFormProps) {
     }
     const saved = loadPropertyListing();
     if (saved) setListing(saved);
+    const writing = loadWritingStyle();
+    const font = getFont(writing.fontId);
+    setFontFamily(font.cssFamily);
+    setFontLabel(font.label);
     setReady(true);
   }, [templateId, router]);
 
@@ -73,12 +84,16 @@ export function PropertyInfoForm({ templateId }: PropertyInfoFormProps) {
   const handleSubmit = () => {
     const hasTitle = listing.titleLine1.trim() || listing.titleLine2.trim();
     if (!hasTitle) {
-      setError("Ajoute au moins une ligne de titre (comme sur l’aperçu).");
+      setError("Ajoute au moins une ligne de titre.");
       return;
     }
     setError(null);
     savePropertyListing(listing);
-    router.push(`/creer/generer?template=${templateId}`);
+    if (isDynamic) {
+      router.push(`/creer/generer?template=${templateId}`);
+    } else {
+      router.push(`/creer/rendu?template=${templateId}`);
+    }
   };
 
   if (!ready) {
@@ -93,14 +108,14 @@ export function PropertyInfoForm({ templateId }: PropertyInfoFormProps) {
     <div className="relative flex flex-1 flex-col pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
       <div className="animate-fade-up px-5 pt-1 text-center sm:px-8">
         <p className="text-[11px] font-medium tracking-[0.2em] text-muted uppercase">
-          Étape 3
+          Étape 4
         </p>
         <h2 className="mt-1.5 font-display text-3xl font-medium tracking-tight text-pearl sm:text-4xl">
-          Infos du bien
+          Vos textes
         </h2>
         <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted">
-          Ces textes apparaissent en overlay cinéma (Playfair crème), comme
-          l’aperçu DYNAMIC.
+          Ils s’afficheront dans le style choisi
+          {fontLabel ? ` (${fontLabel})` : ""}.
         </p>
       </div>
 
@@ -116,7 +131,8 @@ export function PropertyInfoForm({ templateId }: PropertyInfoFormProps) {
               onChange={(e) => update(field.key, e.target.value)}
               placeholder={field.placeholder}
               maxLength={80}
-              className="mt-1.5 w-full rounded-xl border border-border bg-surface px-4 py-3 font-display text-[17px] text-pearl outline-none transition-colors placeholder:text-muted/50 focus:border-gold/50"
+              className="mt-1.5 w-full rounded-xl border border-border bg-surface px-4 py-3 text-[17px] text-pearl outline-none transition-colors placeholder:text-muted/50 focus:border-gold/50"
+              style={{ fontFamily: fontFamily }}
             />
             {field.hint ? (
               <span className="mt-1 block text-[12px] text-muted">
@@ -138,7 +154,7 @@ export function PropertyInfoForm({ templateId }: PropertyInfoFormProps) {
           <Button
             variant="ghost"
             onClick={() =>
-              router.push(`/creer/medias?template=${templateId}`)
+              router.push(`/creer/ecriture?template=${templateId}`)
             }
           >
             Retour
@@ -150,7 +166,7 @@ export function PropertyInfoForm({ templateId }: PropertyInfoFormProps) {
             showArrow
             onClick={handleSubmit}
           >
-            Lancer la génération
+            {isDynamic ? "Lancer la génération" : "Ouvrir la timeline"}
           </Button>
         </div>
       </div>

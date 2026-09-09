@@ -2,6 +2,7 @@ import { Header } from "@/components/layout/Header";
 import { AppShell } from "@/components/layout/AppShell";
 import { DynamicEditClient } from "@/components/dynamic/DynamicEditClient";
 import { getTemplateById } from "@/data/templates";
+import { DEFAULT_TEMPLATE_ID } from "@/lib/product";
 import { redirect } from "next/navigation";
 
 type EditPageProps = {
@@ -10,17 +11,16 @@ type EditPageProps = {
 
 export const metadata = {
   title: "Personnaliser — ARÉO",
-  description: "Ajuste les textes et ajoute ta signature vidéo.",
+  description: "Ajuste les textes, couleur et effets.",
 };
 
 export default async function DynamicEditPage({ searchParams }: EditPageProps) {
   const params = await searchParams;
-  const template = params.template
-    ? getTemplateById(params.template)
-    : undefined;
+  const templateId = params.template ?? DEFAULT_TEMPLATE_ID;
+  const template = getTemplateById(templateId) ?? getTemplateById(DEFAULT_TEMPLATE_ID);
 
-  if (!params.template || !template || template.category !== "dynamic") {
-    redirect("/creer");
+  if (!template || template.category !== "dynamic") {
+    redirect(`/creer/medias?template=${DEFAULT_TEMPLATE_ID}`);
   }
 
   return (
@@ -28,7 +28,7 @@ export default async function DynamicEditPage({ searchParams }: EditPageProps) {
       <Header
         showBack
         backHref={`/creer/resultat?template=${template.id}`}
-        stepLabel="4 / 4"
+        stepLabel="3 / 4"
       />
       <main className="flex flex-1 flex-col">
         <DynamicEditClient templateId={template.id} />
