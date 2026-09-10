@@ -3,7 +3,9 @@ import { ensureFalCredentials } from "./fal";
 
 /**
  * Moteur produit MVP : Veo 3.1 Lite I2V
- * ~$0.03/s @ 720p sans audio → 4 photos ≈ $0.48 | 12 ≈ $1.44
+ * Sans audio : 720p ≈ $0.03/s | 1080p ≈ $0.05/s
+ * Clip API = 4 s → ≈ $0.12 (720p) ou ≈ $0.20 (1080p) par photo
+ * 4 photos @ 1080p ≈ $0.80 | 8 ≈ $1.60 | 12 ≈ $2.40
  */
 export const VEO_I2V_MODEL =
   "fal-ai/veo3.1/lite/image-to-video" as const;
@@ -12,14 +14,14 @@ export const VEO_CLIP_DURATION = "4s" as const;
 export const VEO_CLIP_SECONDS = 4;
 
 /**
- * Prompt Lite : fidélité stricte + mouvement minimal stable
- * (Lite invente plus facilement — on verrouille fort).
+ * Prompt Lite : fidélité + netteté.
+ * Le mouvement vient du brief cinéma — ne pas le verrouiller ici.
  */
 export const VEO_FIDELITY_PROMPT =
-  "Animate ONLY this exact real-estate photograph. Preserve every object, wall, floor, ceiling, window, furniture piece, material, color, and proportion with pixel-level fidelity — do not invent, remove, duplicate, morph, or rearrange anything. Locked tripod, rock-steady, ultra-smooth constant-speed cinematic push-in (or subtle lateral glide), no handheld, no shake, no zoom jump, no dolly crash. Natural daylight matching the source. Photoreal luxury listing look. No people, no text, no watermark, no logo.";
+  "Animate ONLY this exact real-estate photograph. Preserve every object, wall, floor, ceiling, window, furniture, material, color and proportion — do not invent, remove, morph or rearrange anything. Ultra-sharp photoreal luxury listing: crisp edges, fine material texture, clean reflections, natural light matching the source. No people, no text, no watermark, no logo.";
 
 export const VEO_NEGATIVE_PROMPT =
-  "invented furniture, new objects, extra decor, missing furniture, morphing, melting walls, warped geometry, stretched rooms, camera shake, handheld, wobble, jitter, abrupt zoom, people, faces, text, watermark, logo, cartoon, low quality, flicker";
+  "invented furniture, new objects, extra decor, missing furniture, morphing, melting walls, warped geometry, stretched rooms, camera shake, handheld, wobble, jitter, motion smear, radial blur, soft mushy focus, low resolution, people, faces, text, watermark, logo, cartoon, flicker";
 
 export type VeoI2VInput = {
   imageUrl: string;
@@ -36,7 +38,7 @@ export type VeoI2VResult = {
 };
 
 /**
- * Photo → mini-clip cinéma (Veo 3.1 Lite @ 720p).
+ * Photo → mini-clip cinéma (Veo 3.1 Lite @ 1080p par défaut).
  * Appel serveur uniquement — ne jamais exposer FAL_KEY au client.
  */
 export async function generateVeoClipFromImage(
@@ -52,7 +54,8 @@ export async function generateVeoClipFromImage(
       generate_audio: input.generateAudio ?? false,
       aspect_ratio: "9:16",
       duration: input.duration ?? VEO_CLIP_DURATION,
-      resolution: input.resolution ?? "720p",
+      // 1080p sans audio (~$0.05/s) — nettement plus net que 720p sur mobile
+      resolution: input.resolution ?? "1080p",
     },
     logs: true,
     onQueueUpdate: (update) => {

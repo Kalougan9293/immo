@@ -59,13 +59,23 @@ export function DynamicGenerateClient({
             .filter((u): u is string => Boolean(u)) ?? [];
         setPreviews(urls);
 
-        setStatus("Chargement");
+        setStatus("Préparation");
+        setProgress(6);
+        const photoCount = Math.max(1, upload.medias.length);
+        // ~22 s / plan Veo 1080p + marge assemblage (estimation, pas un timer aléatoire)
+        const estMs = 14_000 + photoCount * 22_000;
+        const startedAt = Date.now();
         tick = setInterval(() => {
-          setProgress((p) => {
-            if (p >= 88) return p;
-            return Math.min(88, p + 0.12 + Math.random() * 0.2);
-          });
-        }, 1400);
+          const ratio = (Date.now() - startedAt) / estMs;
+          // Courbe douce → plafonne à 90 % jusqu’à la fin réelle
+          const eased = 1 - Math.exp(-ratio * 1.35);
+          const next = Math.min(90, 6 + eased * 84);
+          setProgress(next);
+          if (next < 12) setStatus("Préparation");
+          else if (next < 72) setStatus("Plans cinéma");
+          else if (next < 86) setStatus("Assemblage");
+          else setStatus("Finalisation");
+        }, 450);
 
         const res = await fetch("/api/render", {
           method: "POST",
@@ -74,6 +84,7 @@ export function DynamicGenerateClient({
             templateId,
             medias: upload.medias,
             property,
+            coverPath: upload.coverPath ?? null,
             edits: writingStyleId ? { writingStyleId } : {},
           }),
         });
@@ -101,9 +112,9 @@ export function DynamicGenerateClient({
         }
 
         if (tick) clearInterval(tick);
-        setStatus("Chargement");
+        setStatus("Finalisation");
         setProgress(100);
-        await new Promise((r) => setTimeout(r, 550));
+        await new Promise((r) => setTimeout(r, 450));
 
         const session: RenderSession = {
           templateId,

@@ -43,6 +43,8 @@ type Body = {
   property?: unknown;
   /** DYNAMIC post-gen : master + signature, sans Veo */
   mode?: "generate" | "polish";
+  /** Photo de couverture choisie à l’étape médias */
+  coverPath?: string | null;
 };
 
 export async function POST(request: Request) {
@@ -83,7 +85,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // DYNAMIC generate → Veo (photos) ; videos = effets FFmpeg ; polish / CLASSIC → FFmpeg
+    // DYNAMIC generate → Veo (photos) ; polish / CLASSIC → FFmpeg
     const engine =
       mode === "polish" ? "ffmpeg" : engineForTemplate(templateId);
 
@@ -193,6 +195,14 @@ export async function POST(request: Request) {
         sourcePaths.find((p) =>
           /\.(jpe?g|png|webp|gif|heic|heif|avif|bmp)$/i.test(p),
         ) ?? null;
+      const requestedCover =
+        typeof body.coverPath === "string" && body.coverPath.trim()
+          ? body.coverPath.trim()
+          : null;
+      const preferredCover =
+        requestedCover && sourcePaths.includes(requestedCover)
+          ? requestedCover
+          : firstImagePath;
 
       if (userId && replaceVideoId) {
         const { data: existing, error: existingError } = await supabase
@@ -230,14 +240,21 @@ export async function POST(request: Request) {
           }
           savedVideoId = replaceVideoId;
           coverPath = (existing.cover_path as string | null) ?? null;
-          // Pas encore de cover → 1ʳᵉ photo auto
-          if (!coverPath && firstImagePath) {
+          // generate : appliquer la cover choisie à l’étape 1 ; polish : garder
+          if (mode === "generate" && preferredCover) {
             await supabase
               .from("areo_videos")
-              .update({ cover_path: firstImagePath })
+              .update({ cover_path: preferredCover })
               .eq("id", replaceVideoId)
               .eq("user_id", userId);
-            coverPath = firstImagePath;
+            coverPath = preferredCover;
+          } else if (!coverPath && preferredCover) {
+            await supabase
+              .from("areo_videos")
+              .update({ cover_path: preferredCover })
+              .eq("id", replaceVideoId)
+              .eq("user_id", userId);
+            coverPath = preferredCover;
           }
         }
       }
@@ -269,7 +286,7 @@ export async function POST(request: Request) {
           evicted += 1;
         }
 
-        coverPath = firstImagePath;
+        coverPath = preferredCover;
         const { data: inserted, error: insertError } = await supabase
           .from("areo_videos")
           .insert({
@@ -285,6 +302,10 @@ export async function POST(request: Request) {
 
         if (insertError) throw new Error(insertError.message);
         savedVideoId = inserted.id as string;
+      }
+
+      if (!coverPath) {
+        coverPath = preferredCover;
       }
 
       if (coverPath) {

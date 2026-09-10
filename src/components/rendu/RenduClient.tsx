@@ -161,6 +161,7 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
               const list = cinemaTransitions(
                 templateId,
                 nextClips.length - 1,
+                nextClips.length,
               );
               return (
                 EDIT_TRANSITIONS.find((t) => t.id === list[i])?.id ??
@@ -481,17 +482,22 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
         : "Montage HD en cours…",
     );
     setWaitProgress(8);
-
+    const startedAt = Date.now();
+    const estMs = useVeo
+      ? 14_000 + Math.max(1, clips.length) * 22_000
+      : 16_000;
     let tick: ReturnType<typeof setInterval> | null = setInterval(() => {
-      setWaitProgress((p) => {
-        if (p >= 88) return p;
-        const room = 88 - p;
-        const step = useVeo
-          ? Math.max(0.08, room * 0.008) + Math.random() * 0.15
-          : Math.max(0.2, room * 0.02) + Math.random() * 0.4;
-        return Math.min(88, p + step);
-      });
-    }, useVeo ? 1200 : 700);
+      const ratio = (Date.now() - startedAt) / estMs;
+      const eased = 1 - Math.exp(-ratio * 1.35);
+      const next = Math.min(90, 8 + eased * 82);
+      setWaitProgress(next);
+      if (useVeo) {
+        if (next < 12) setWaitStatus("Préparation…");
+        else if (next < 72) setWaitStatus("Plans cinéma…");
+        else if (next < 86) setWaitStatus("Assemblage…");
+        else setWaitStatus("Finalisation…");
+      }
+    }, 450);
 
     try {
       const medias: UploadedMedia[] = clips.map((c) => ({
@@ -533,6 +539,9 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
                 stroke: t.stroke ?? "dark",
                 bg: t.bg ?? null,
                 bgAlpha: t.bgAlpha ?? 0,
+                enter: t.enter ?? "fade",
+                exit: t.exit ?? "fade",
+                ...(t.fadeSec != null ? { fadeSec: t.fadeSec } : {}),
               })),
           },
           replaceVideoId: result?.savedVideoId ?? null,

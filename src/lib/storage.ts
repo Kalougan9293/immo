@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { detectMediaKind } from "@/lib/media-limits";
 
 export const AREO_MEDIA_BUCKET = "areo-media";
 
@@ -17,6 +18,8 @@ export type UploadedMedia = {
 export type UploadSession = {
   templateId: string;
   medias: UploadedMedia[];
+  /** Photo de couverture (storage path) — défaut = 1ʳᵉ image */
+  coverPath?: string | null;
   createdAt: string;
 };
 
@@ -80,11 +83,7 @@ export async function uploadMediaFile(
     throw new Error(error.message);
   }
 
-  const kind = file.type.startsWith("video/")
-    ? "video"
-    : file.type.startsWith("image/")
-      ? "image"
-      : "other";
+  const kind = detectMediaKind(file);
 
   return {
     path,

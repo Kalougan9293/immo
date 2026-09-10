@@ -11,6 +11,8 @@ import {
   MIN_CLIP_SEC,
   MAX_CLIP_SEC,
   TEXT_FADE_SECONDS,
+  DEFAULT_TEXT_ENTER,
+  DEFAULT_TEXT_EXIT,
   type RenderEditOptions,
   type TextLayerEdit,
 } from "./edit-options";
@@ -233,6 +235,48 @@ async function imageToClip(
   return duration;
 }
 
+/** Lit la durée source (ffmpeg -i, sans décodage). */
+async function probeDurationSec(input: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    let bin: string;
+    try {
+      bin = resolveFfmpegPath();
+    } catch {
+      resolve(null);
+      return;
+    }
+
+    const child = spawn(bin, ["-hide_banner", "-i", input], {
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const match = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+      if (!match) {
+        resolve(null);
+        return;
+      }
+      const sec =
+        Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+      resolve(Number.isFinite(sec) && sec > 0 ? sec : null);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish();
+    }, 8000);
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on("close", finish);
+    child.on("error", finish);
+  });
+}
+
 async function videoToClip(
   input: string,
   output: string,
@@ -240,11 +284,14 @@ async function videoToClip(
   durationSec: number,
   trimStartSec = 0,
 ): Promise<number> {
+  const ss = Math.max(0, trimStartSec);
+  const probed = await probeDurationSec(input);
+  const remaining =
+    probed != null ? Math.max(0.05, probed - ss) : durationSec;
   const duration = Math.max(
     MIN_CLIP_SEC,
-    Math.min(MAX_CLIP_SEC, durationSec),
+    Math.min(MAX_CLIP_SEC, durationSec, remaining),
   );
-  const ss = Math.max(0, trimStartSec);
   const vf =
     `${coverScale()},` +
     `fps=${FPS},` +
@@ -457,13 +504,37 @@ async function burnTextOverlays(
         : "";
     const fadeMax = layer.fadeSec ?? TEXT_FADE_SECONDS;
     const fade = Math.min(fadeMax, (end - start) / 2);
-    const alphaExpr =
-      fade > 0.001
-        ? `if(lt(t\\,${start.toFixed(2)}+${fade.toFixed(2)})\\,(t-${start.toFixed(2)})/${fade.toFixed(2)}\\,if(gt(t\\,${end.toFixed(2)}-${fade.toFixed(2)})\\,(${end.toFixed(2)}-t)/${fade.toFixed(2)}\\,1))`
-        : "1";
-    const enable = `between(t\\,${start.toFixed(2)}\\,${end.toFixed(2)})`;
-    // Éviter "text_h" / "text_w" comme noms d’options mal parsés
-    const textY = `h*${yN.toFixed(3)}-th/2`;
+    const enter = layer.enter ?? DEFAULT_TEXT_ENTER;
+    const exit = layer.exit ?? DEFAULT_TEXT_EXIT;
+    const s = start.toFixed(2);
+    const e = end.toFixed(2);
+    const f = fade.toFixed(2);
+    let alphaExpr = "1";
+    if (fade > 0.001 && (enter !== "none" || exit !== "none")) {
+      const inPart =
+        enter === "none"
+          ? "1"
+          : `if(lt(t\\,${s}+${f})\\,(t-${s})/${f}\\,1)`;
+      const outPart =
+        exit === "none"
+          ? "1"
+          : `if(gt(t\\,${e}-${f})\\,(${e}-t)/${f}\\,1)`;
+      alphaExpr = `min(${inPart}\\,${outPart})`;
+    }
+    const enable = `between(t\\,${s}\\,${e})`;
+    const risePx = Math.round(28 * scale);
+    let textY = `h*${yN.toFixed(3)}-th/2`;
+    if (fade > 0.001 && (enter === "rise" || exit === "fall")) {
+      const enterOff =
+        enter === "rise"
+          ? `if(lt(t\\,${s}+${f})\\,${risePx}*(1-(t-${s})/${f})\\,0)`
+          : "0";
+      const exitOff =
+        exit === "fall"
+          ? `if(gt(t\\,${e}-${f})\\,${risePx}*(1-(${e}-t)/${f})\\,0)`
+          : "0";
+      textY = `h*${yN.toFixed(3)}-th/2+(${enterOff})+(${exitOff})`;
+    }
 
     const brand = resolveBrandIcon(layer.icon, layer.content);
     let textContent =
@@ -915,7 +986,8 @@ export async function buildVeoReelMp4(
             media.localPath,
             clipPath,
             recipe,
-            overrideDuration ?? Math.min(slot, MAX_USER_VIDEO_SEC),
+            overrideDuration ??
+              Math.min(slot, MAX_USER_VIDEO_SEC, TARGET_REEL_SECONDS),
             trimStart,
           );
           return { path: clipPath, duration };
@@ -943,7 +1015,7 @@ export async function buildVeoReelMp4(
         const imageUrl = await uploadLocalImageToFal(media.localPath);
         const { videoUrl, requestId } = await generateVeoClipFromImage({
           imageUrl,
-          prompt: cinemaMotionPrompt(templateId, i),
+          prompt: cinemaMotionPrompt(templateId, i, limited.length),
           negativePrompt: cinemaNegative(templateId),
           duration: apiDur,
         });
@@ -980,7 +1052,11 @@ export async function buildVeoReelMp4(
     const transitionArg: string | string[] =
       edits?.transitions?.length === clips.length - 1
         ? edits.transitions
-        : cinemaTransitions(templateId, Math.max(0, clips.length - 1));
+        : cinemaTransitions(
+            templateId,
+            Math.max(0, clips.length - 1),
+            limited.length,
+          );
 
     await concatWithXfade(
       clips,

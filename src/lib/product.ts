@@ -10,7 +10,7 @@ export const VEO_SECONDS_PER_PHOTO = 4;
 
 /**
  * Toutes les photos → Veo Lite (max = plafond upload).
- * ~$0.03/s × 4 s ≈ $0.12/photo → 12 photos ≈ $1.44
+ * 1080p sans audio ≈ $0.20/photo (4 s) → 4 ≈ $0.80 | 12 ≈ $2.40
  */
 export const MAX_VEO_PHOTOS_PER_REEL = 12;
 

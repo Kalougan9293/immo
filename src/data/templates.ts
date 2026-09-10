@@ -27,7 +27,7 @@ export const TEMPLATES: Template[] = [
   {
     id: "dynamic-reel",
     title: "Editorial Cine",
-    badge: "LENT",
+    badge: "CINÉ",
     category: "dynamic",
     preview:
       "linear-gradient(155deg, #0e1014 0%, #1a2030 38%, #2a3548 70%, #c4a57433 100%)",

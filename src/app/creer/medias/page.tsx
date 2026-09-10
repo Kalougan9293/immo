@@ -11,7 +11,7 @@ type MediasPageProps = {
 
 export const metadata = {
   title: "Ajouter vos médias — ARÉO",
-  description: "Importez vos photos et vidéos pour générer votre film.",
+  description: "Importez vos photos pour générer votre film.",
 };
 
 export default async function MediasPage({ searchParams }: MediasPageProps) {

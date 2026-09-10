@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Plus, Trash2, Film, FileImage } from "lucide-react";
+import { ImagePlus, Plus, Trash2, FileImage, Star } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import {
@@ -19,6 +19,7 @@ import {
   MEDIA_LIMITS_COPY,
   MIN_PHOTOS_PER_REEL,
   countMediaKinds,
+  detectMediaKind,
   validateMediaSelection,
 } from "@/lib/media-limits";
 import { RenderWaitingOverlay } from "@/components/medias/RenderWaitingOverlay";
@@ -35,7 +36,6 @@ type MediaItem = {
   previewUrl: string;
   kind: "image" | "video" | "other";
   revokeOnRemove: boolean;
-  durationSec?: number;
 };
 
 type MediaUploaderProps = {
@@ -46,34 +46,6 @@ type MediaUploaderProps = {
   flow?: "classic" | "dynamic";
 };
 
-function detectKind(file: File): MediaItem["kind"] {
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("video/")) return "video";
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  if (
-    ext &&
-    [
-      "heic",
-      "heif",
-      "jpg",
-      "jpeg",
-      "png",
-      "webp",
-      "gif",
-      "bmp",
-      "tif",
-      "tiff",
-      "avif",
-    ].includes(ext)
-  ) {
-    return "image";
-  }
-  if (ext && ["mp4", "mov", "m4v", "webm", "avi", "mkv"].includes(ext)) {
-    return "video";
-  }
-  return "other";
-}
-
 export function MediaUploader({
   templateId,
   restoreSession = false,
@@ -83,6 +55,8 @@ export function MediaUploader({
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<MediaItem[]>([]);
+  /** Id de la photo de couverture — défaut = 1ʳᵉ image */
+  const [coverItemId, setCoverItemId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [working, setWorking] = useState(false);
   const [waitStatus, setWaitStatus] = useState(t.media.preparing);
@@ -94,19 +68,34 @@ export function MediaUploader({
     if (!restoreSession) return;
     const session = loadUploadSession();
     if (session?.templateId === templateId && session.medias.length) {
-      setItems(
-        session.medias.map((m, i) => ({
-          id: `remote-${i}-${m.path}`,
-          remotePath: m.path,
-          name: m.name,
-          previewUrl: m.previewUrl || "",
-          kind: m.kind,
-          revokeOnRemove: false,
-        })),
-      );
+      const next = session.medias.map((m, i) => ({
+        id: `remote-${i}-${m.path}`,
+        remotePath: m.path,
+        name: m.name,
+        previewUrl: m.previewUrl || "",
+        kind: m.kind,
+        revokeOnRemove: false,
+      }));
+      setItems(next);
+      const cover =
+        next.find((m) => m.remotePath === session.coverPath) ??
+        next.find((m) => m.kind === "image");
+      setCoverItemId(cover?.id ?? null);
     }
     setHydrated(true);
   }, [restoreSession, templateId]);
+
+  // Couverture = 1ʳᵉ photo si absente / retirée
+  useEffect(() => {
+    const images = items.filter((i) => i.kind === "image");
+    if (!images.length) {
+      if (coverItemId) setCoverItemId(null);
+      return;
+    }
+    if (!coverItemId || !images.some((i) => i.id === coverItemId)) {
+      setCoverItemId(images[0].id);
+    }
+  }, [items, coverItemId]);
 
   const { photos: photoCount } = countMediaKinds(items);
   const canAddPhoto = photoCount < MAX_PHOTOS_PER_REEL;
@@ -130,7 +119,7 @@ export function MediaUploader({
     const messages: string[] = [];
 
     for (const file of files) {
-      const kind = detectKind(file);
+      const kind = detectMediaKind(file);
       if (kind === "video") {
         messages.push(MEDIA_LIMITS_COPY.noVideo);
         continue;
@@ -221,43 +210,57 @@ export function MediaUploader({
       const folder = await resolveUploadFolder();
       const uploaded: UploadedMedia[] = [];
       const toUpload = items.filter((i) => i.file);
+      let coverPath: string | null = null;
 
       let uploadedCount = 0;
       for (const item of items) {
+        let path: string;
         if (item.remotePath) {
+          path = item.remotePath;
           uploaded.push({
-            path: item.remotePath,
+            path,
             name: item.name,
             kind: item.kind,
             size: item.file?.size ?? 0,
             previewUrl: item.previewUrl || undefined,
           });
+        } else if (item.file) {
+          setWaitStatus(t.media.uploading);
+          const result = await uploadMediaFile(item.file, folder);
+          path = result.path;
+          uploaded.push({
+            ...result,
+            previewUrl: item.previewUrl || undefined,
+          });
+          uploadedCount += 1;
+          setWaitProgress(
+            Math.round(
+              (uploadedCount / Math.max(1, toUpload.length)) * 92,
+            ),
+          );
+        } else {
           continue;
         }
-        if (!item.file) continue;
-        setWaitStatus(t.media.uploading);
-        const result = await uploadMediaFile(item.file, folder);
-        uploaded.push({
-          ...result,
-          previewUrl: item.previewUrl || undefined,
-        });
-        uploadedCount += 1;
-        setWaitProgress(
-          Math.round(
-            (uploadedCount / Math.max(1, toUpload.length)) * 92,
-          ),
-        );
+
+        if (item.id === coverItemId) {
+          coverPath = path;
+        }
       }
 
       if (!uploaded.length) {
         throw new Error("Aucun média valide.");
       }
 
-      // Même parcours DYNAMIC / CLASSIC : écriture → textes → timeline
+      if (!coverPath) {
+        coverPath =
+          uploaded.find((m) => m.kind === "image")?.path ?? uploaded[0].path;
+      }
+
       clearRenderSession();
       saveUploadSession({
         templateId,
         medias: uploaded,
+        coverPath,
         createdAt: new Date().toISOString(),
       });
 
@@ -335,7 +338,6 @@ export function MediaUploader({
           }}
         />
 
-        {/* État vide : grande zone d’ajout */}
         {items.length === 0 ? (
           <button
             type="button"
@@ -371,22 +373,16 @@ export function MediaUploader({
             </span>
           </button>
         ) : (
-          /* État rempli : grille — « + » fixe en case 1, médias ensuite */
           <div {...dropHandlers}>
             <p className="mb-3 text-[12px] tracking-wide text-muted">
-              {photoCount}/{MAX_PHOTOS_PER_REEL} photos
-              {photoCount < MIN_PHOTOS_PER_REEL ? (
-                <span className="text-gold">
-                  {" "}
-                  · encore {MIN_PHOTOS_PER_REEL - photoCount}
-                </span>
-              ) : null}
-              {items.length > 1 ? (
-                <span className="text-muted-strong">
-                  {" "}
-                  · {t.media.reorder}
-                </span>
-              ) : null}
+              {photoCount}/{MAX_PHOTOS_PER_REEL}
+              {photoCount < MIN_PHOTOS_PER_REEL
+                ? ` - encore ${MIN_PHOTOS_PER_REEL - photoCount} minimum`
+                : ""}
+              {items.length > 1 ? ` - ${t.media.reorder.toLowerCase()}` : ""}
+            </p>
+            <p className="mb-2 text-[11px] text-muted-strong">
+              {t.media.coverHint}
             </p>
             <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               <li>
@@ -415,57 +411,76 @@ export function MediaUploader({
                 </button>
               </li>
 
-              {items.map((item, index) => (
-                <li
-                  key={item.id}
-                  draggable={!working}
-                  onDragStart={(e) => onItemDragStart(e, index)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => onItemDrop(e, index)}
-                  className="group relative aspect-square cursor-grab overflow-hidden rounded-xl border border-border bg-surface active:cursor-grabbing"
-                >
-                  {item.kind === "image" && item.previewUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.previewUrl}
-                      alt=""
-                      className="pointer-events-none h-full w-full object-cover"
-                      draggable={false}
-                    />
-                  ) : item.kind === "video" && item.previewUrl ? (
-                    <video
-                      src={item.previewUrl}
-                      muted
-                      playsInline
-                      className="pointer-events-none h-full w-full object-cover"
-                      draggable={false}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted">
-                      {item.kind === "video" ? (
-                        <Film className="size-5" strokeWidth={1.5} />
-                      ) : (
-                        <FileImage className="size-5" strokeWidth={1.5} />
-                      )}
-                      <span className="max-w-[90%] truncate px-1 text-[9px]">
-                        {item.name}
-                      </span>
-                    </div>
-                  )}
-                  <span className="absolute bottom-1.5 left-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm">
-                    {index + 1}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={working}
-                    onClick={() => removeItem(item.id)}
-                    className="absolute top-1.5 right-1.5 flex size-9 touch-manipulation items-center justify-center rounded-full border border-white/15 bg-black/55 text-white opacity-100 backdrop-blur-sm transition-opacity sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-40"
-                    aria-label="Retirer"
+              {items.map((item, index) => {
+                const isCover = item.id === coverItemId;
+                return (
+                  <li
+                    key={item.id}
+                    draggable={!working}
+                    onDragStart={(e) => onItemDragStart(e, index)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => onItemDrop(e, index)}
+                    className={cn(
+                      "group relative aspect-square cursor-grab overflow-hidden rounded-xl border bg-surface active:cursor-grabbing",
+                      isCover ? "border-gold" : "border-border",
+                    )}
                   >
-                    <Trash2 className="size-3.5" strokeWidth={1.75} />
-                  </button>
-                </li>
-              ))}
+                    {item.kind === "image" && item.previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.previewUrl}
+                        alt=""
+                        className="pointer-events-none h-full w-full object-cover"
+                        draggable={false}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted">
+                        <FileImage className="size-5" strokeWidth={1.5} />
+                        <span className="max-w-[90%] truncate px-1 text-[9px]">
+                          {item.name}
+                        </span>
+                      </div>
+                    )}
+                    <span className="absolute bottom-1.5 left-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm">
+                      {index + 1}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={working || item.kind !== "image"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCoverItemId(item.id);
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className={cn(
+                        "absolute top-1.5 left-1.5 flex size-9 touch-manipulation items-center justify-center rounded-full border backdrop-blur-sm transition-colors",
+                        isCover
+                          ? "border-gold/60 bg-gold/30 text-gold"
+                          : "border-white/15 bg-black/55 text-white/80 hover:text-gold",
+                      )}
+                      aria-label={t.media.coverStar}
+                      aria-pressed={isCover}
+                      title={t.media.coverStar}
+                    >
+                      <Star
+                        className="size-3.5"
+                        strokeWidth={1.75}
+                        fill={isCover ? "currentColor" : "none"}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={working}
+                      onClick={() => removeItem(item.id)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="absolute top-1.5 right-1.5 flex size-9 touch-manipulation items-center justify-center rounded-full border border-white/15 bg-black/55 text-white opacity-100 backdrop-blur-sm transition-opacity sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-40"
+                      aria-label="Retirer"
+                    >
+                      <Trash2 className="size-3.5" strokeWidth={1.75} />
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
@@ -474,7 +489,9 @@ export function MediaUploader({
           <p className="mt-4 text-center text-[13px] text-red-400" role="alert">
             {error}
           </p>
-        ) : selectionError && items.length > 0 ? (
+        ) : selectionError &&
+          items.length > 0 &&
+          selectionError !== MEDIA_LIMITS_COPY.tooFewPhotos ? (
           <p className="mt-4 text-center text-[13px] text-muted" role="status">
             {selectionError}
           </p>

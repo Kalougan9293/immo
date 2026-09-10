@@ -9,7 +9,7 @@ import {
   findClipAtTime,
   getFont,
   MAX_EDIT_TEXT,
-  textLayerOpacity,
+  textLayerMotion,
   totalTimelineDuration,
   type TimelineClip,
   type TimelineTextLayer,
@@ -170,6 +170,8 @@ function PreviewText({
   layer,
   selected,
   opacity,
+  ty,
+  pop,
   onSelect,
   onMove,
   onChange,
@@ -181,6 +183,8 @@ function PreviewText({
   selected: boolean;
   /** 0–1 fondu entrée/sortie (1 si édition hors plage) */
   opacity: number;
+  ty: number;
+  pop: number;
   onSelect?: (id: string) => void;
   onMove?: (id: string, x: number, y: number) => void;
   onChange?: (id: string, content: string) => void;
@@ -280,11 +284,8 @@ function PreviewText({
     window.addEventListener("pointerup", up);
   };
 
-  // Léger slide + punch banger lié à l’opacité
+  // Mouvement lié aux effets entrée / sortie choisis
   const visual = textVisualStyle(layer);
-  const isBanger = layer.fontId === "anton" || layer.fontId === "black";
-  const rise = (1 - opacity) * (isBanger ? 10 : 6);
-  const pop = isBanger ? 0.92 + opacity * 0.08 : 1;
 
   return (
     <div
@@ -298,7 +299,7 @@ function PreviewText({
         left: `${(layer.x ?? 0.5) * 100}%`,
         top: `${(layer.y ?? 0.82) * 100}%`,
         opacity,
-        transform: `translate(-50%, calc(-50% + ${rise}px)) scale(${pop})`,
+        transform: `translate(-50%, calc(-50% + ${ty}px)) scale(${pop})`,
         willChange: "opacity, transform",
       }}
     >
@@ -311,15 +312,7 @@ function PreviewText({
             : "cursor-pointer",
           dragging && "cursor-grabbing",
         )}
-        style={{
-          ...visual,
-          ...(layer.anim === "glow"
-            ? {
-                textShadow:
-                  "0 0 12px rgba(255,255,255,0.55), 0 0 28px rgba(196,165,116,0.35), 0 1px 2px rgba(0,0,0,0.5)",
-              }
-            : null),
-        }}
+        style={visual}
       >
         <div className="flex items-center justify-center gap-1.5">
           {layer.icon === "whatsapp" ? (
@@ -490,15 +483,19 @@ export function LivePreview({
 
       {visibleTexts.map((t) => {
         const selected = selectedTextId === t.id;
-        const fadeOp = textLayerOpacity(t, currentTime);
-        // Hors plage + sélectionné = édition : opaque ; sinon fondu uniforme
-        const opacity = fadeOp > 0 ? fadeOp : selected ? 1 : 0;
+        const motion = textLayerMotion(t, currentTime);
+        // Hors plage + sélectionné = édition : opaque ; sinon effets entrée/sortie
+        const opacity = motion.opacity > 0 ? motion.opacity : selected ? 1 : 0;
+        const ty = motion.opacity > 0 ? motion.ty : 0;
+        const pop = motion.opacity > 0 ? motion.pop : 1;
         return (
           <PreviewText
             key={t.id}
             layer={t}
             selected={selected}
             opacity={opacity}
+            ty={ty}
+            pop={pop}
             onSelect={onTextSelect}
             onMove={onTextPositionChange}
             onChange={onTextContentChange}

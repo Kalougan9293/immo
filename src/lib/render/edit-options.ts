@@ -46,7 +46,11 @@ export type TimelineTextLayer = {
   bgAlpha?: number;
   /** Italique */
   italic?: boolean;
-  /** Animation entrée/sortie (fade = défaut, glow = halo, write = bientôt) */
+  /** Entrée texte */
+  enter?: TextEnterFx;
+  /** Sortie texte */
+  exit?: TextExitFx;
+  /** @deprecated — remplacé par enter/exit */
   anim?: "fade" | "glow" | "write";
   /** Typo cinéma luxe (majuscules + tracking) — preview + export */
   look?: "cinema" | "cinema-meta";
@@ -55,6 +59,12 @@ export type TimelineTextLayer = {
   /** Icône optionnelle (ex. WhatsApp, pin lieu) */
   icon?: "whatsapp" | "pin";
 };
+
+export type TextEnterFx = "none" | "fade" | "rise" | "pop";
+export type TextExitFx = "none" | "fade" | "fall" | "pop";
+
+export const DEFAULT_TEXT_ENTER: TextEnterFx = "fade";
+export const DEFAULT_TEXT_EXIT: TextExitFx = "fade";
 
 export type TextStroke = "dark" | "light" | "gold" | "none";
 
@@ -79,20 +89,52 @@ export function clampTextScale(s: number): number {
   );
 }
 
-/** Opacité 0–1 selon le playhead (fondu uniforme entrée/sortie). */
-export function textLayerOpacity(
-  layer: Pick<TimelineTextLayer, "start" | "duration" | "fadeSec">,
+/** Opacité + mouvement entrée/sortie selon le playhead. */
+export function textLayerMotion(
+  layer: Pick<
+    TimelineTextLayer,
+    "start" | "duration" | "fadeSec" | "enter" | "exit"
+  >,
   currentTime: number,
-): number {
+): { opacity: number; ty: number; pop: number } {
   const start = layer.start;
   const end = start + Math.max(0.05, layer.duration);
-  if (currentTime < start || currentTime >= end) return 0;
+  if (currentTime < start || currentTime >= end) {
+    return { opacity: 0, ty: 0, pop: 1 };
+  }
+
+  const enter = layer.enter ?? DEFAULT_TEXT_ENTER;
+  const exit = layer.exit ?? DEFAULT_TEXT_EXIT;
   const fadeMax = layer.fadeSec ?? TEXT_FADE_SECONDS;
   const fade = Math.min(fadeMax, (end - start) / 2);
-  if (fade <= 0.001) return 1;
-  const fadeIn = Math.min(1, (currentTime - start) / fade);
-  const fadeOut = Math.min(1, (end - currentTime) / fade);
-  return Math.min(fadeIn, fadeOut);
+
+  let fadeIn = 1;
+  if (enter !== "none" && fade > 0.001) {
+    fadeIn = Math.min(1, (currentTime - start) / fade);
+  }
+  let fadeOut = 1;
+  if (exit !== "none" && fade > 0.001) {
+    fadeOut = Math.min(1, (end - currentTime) / fade);
+  }
+
+  const opacity = Math.min(fadeIn, fadeOut);
+  let ty = 0;
+  if (enter === "rise" && fadeIn < 1) ty += (1 - fadeIn) * 14;
+  if (exit === "fall" && fadeOut < 1) ty += (1 - fadeOut) * 14;
+
+  let pop = 1;
+  if (enter === "pop" && fadeIn < 1) pop = 0.86 + fadeIn * 0.14;
+  if (exit === "pop" && fadeOut < 1) pop = Math.min(pop, 0.86 + fadeOut * 0.14);
+
+  return { opacity, ty, pop };
+}
+
+/** @deprecated — utiliser textLayerMotion */
+export function textLayerOpacity(
+  layer: Pick<TimelineTextLayer, "start" | "duration" | "fadeSec" | "enter" | "exit">,
+  currentTime: number,
+): number {
+  return textLayerMotion(layer, currentTime).opacity;
 }
 
 export function luminanceHex(hex: string): number {
@@ -438,6 +480,9 @@ export const EDIT_TRANSITIONS: { id: string; label: string }[] = [
   { id: "wipeleft", label: "Wipe ←" },
   { id: "wiperight", label: "Wipe →" },
   { id: "smoothleft", label: "Glisse" },
+  { id: "smoothright", label: "Glisse →" },
+  { id: "distance", label: "Distance" },
+  { id: "radial", label: "Radial" },
   { id: "circleopen", label: "Cercle" },
 ];
 
@@ -526,6 +571,8 @@ export type TextLayerEdit = {
   /** Typo cinéma luxe */
   look?: "cinema" | "cinema-meta";
   fadeSec?: number;
+  enter?: TextEnterFx;
+  exit?: TextExitFx;
 };
 
 export type RenderEditOptions = {
@@ -680,6 +727,20 @@ export function normalizeEditOptions(
           typeof L.fadeSec === "number"
             ? Math.min(1.4, Math.max(0.12, L.fadeSec))
             : undefined;
+        const enter: TextEnterFx | undefined =
+          L.enter === "none" ||
+          L.enter === "fade" ||
+          L.enter === "rise" ||
+          L.enter === "pop"
+            ? L.enter
+            : undefined;
+        const exit: TextExitFx | undefined =
+          L.exit === "none" ||
+          L.exit === "fade" ||
+          L.exit === "fall" ||
+          L.exit === "pop"
+            ? L.exit
+            : undefined;
         const row: TextLayerEdit = {
           content,
           fontId,
@@ -697,6 +758,8 @@ export function normalizeEditOptions(
         if (icon) row.icon = icon;
         if (look) row.look = look;
         if (fadeSec != null) row.fadeSec = fadeSec;
+        if (enter) row.enter = enter;
+        if (exit) row.exit = exit;
         return [row];
       })
     : undefined;

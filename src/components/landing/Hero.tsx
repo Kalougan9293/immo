@@ -7,6 +7,7 @@ import { useT } from "@/components/i18n/I18nProvider";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { AccountExamples } from "@/components/compte/AccountExamples";
 
 export function Hero() {
   const t = useT();
@@ -46,7 +47,7 @@ export function Hero() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.35)_100%)]" />
       </div>
 
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16 pt-8 text-center sm:px-10">
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-10 pt-8 text-center sm:px-10">
         <div className="mx-auto w-full max-w-lg lg:max-w-xl">
           <h1 className="hero-title animate-fade-up font-display text-[3.5rem] leading-[0.95] font-semibold tracking-[0.2em] sm:text-7xl lg:text-[5.75rem]">
             ARÉO
@@ -97,6 +98,11 @@ export function Hero() {
               )}
             </div>
           </div>
+
+          <AccountExamples
+            onHero
+            className="animate-fade-up animate-delay-3 mx-auto w-full max-w-sm"
+          />
         </div>
       </div>
     </section>

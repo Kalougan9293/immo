@@ -85,6 +85,8 @@ export type Messages = {
     reorder: string;
     moveEarlier: string;
     moveLater: string;
+    coverStar: string;
+    coverHint: string;
   };
   compte: {
     createVideo: string;
@@ -216,7 +218,7 @@ export const fr: Messages = {
   media: {
     step: "Étape 1",
     title: "Médias",
-    hint: "4 a 12 photos",
+    hint: "4 à 12 photos",
     hintDynamic: "4–12 photos — cinema IA Veo Lite, reel 8–12 s.",
     dropTitle: "Déposez vos photos",
     dropHint: "JPG, PNG, HEIC…",
@@ -229,6 +231,8 @@ export const fr: Messages = {
     reorder: "Réordonner",
     moveEarlier: "Monter",
     moveLater: "Descendre",
+    coverStar: "Couverture",
+    coverHint: "Touchez ★ pour choisir la couverture",
   },
   compte: {
     createVideo: "Créer une vidéo",
@@ -373,6 +377,8 @@ export const en: Messages = {
     reorder: "Reorder",
     moveEarlier: "Move up",
     moveLater: "Move down",
+    coverStar: "Cover",
+    coverHint: "Tap ★ to pick the cover",
   },
   compte: {
     createVideo: "Create a video",

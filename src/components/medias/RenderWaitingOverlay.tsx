@@ -7,18 +7,17 @@ import { cn } from "@/lib/utils";
 type RenderWaitingOverlayProps = {
   previews: string[];
   status: string;
-  /** 0–100 — cible ; l’affichage avance toujours en continu */
+  /** 0–100 — cible ; l’affichage suit sans inventer trop d’avance */
   progress: number;
 };
 
 /**
- * Pourcentage lissé : ne bloque jamais sur un chiffre.
- * - avance en continu vers un plafond ~93 % tant que le job tourne
- * - rattrape vite vers 100 % quand le parent signale la fin
+ * Lissage doux vers la cible parent.
+ * Pas de creep autonome vers 93 % (sinon % incohérent vs durée réelle).
  */
 function useSmoothProgress(target: number) {
   const [shown, setShown] = useState(() =>
-    Math.min(8, Math.max(0, target || 4)),
+    Math.min(12, Math.max(0, target || 4)),
   );
   const shownRef = useRef(shown);
   const targetRef = useRef(target);
@@ -35,21 +34,20 @@ function useSmoothProgress(target: number) {
       let cur = shownRef.current;
 
       if (t >= 99) {
-        cur += (100 - cur) * Math.min(1, dt * 7);
-        if (cur >= 99.4) cur = 100;
+        cur += (100 - cur) * Math.min(1, dt * 8);
+        if (cur >= 99.5) cur = 100;
       } else {
-        const softCap = 93;
-        const gap = Math.max(0, softCap - cur);
-        // Creep permanent (plus rapide au début, plus lent près du plafond)
-        const creepPerSec = 0.65 + gap * 0.018;
-        const creep = creepPerSec * dt;
-        // Rattrapage si le parent a avancé plus vite
-        const catchUp =
-          t > cur ? (t - cur) * Math.min(1, dt * 4) : 0;
-        cur = Math.min(softCap, cur + creep + catchUp);
+        // Suit la cible ; légère avance max +2 % pour fluidité
+        const ceiling = Math.min(96, t + 2);
+        if (cur < ceiling) {
+          cur += (ceiling - cur) * Math.min(1, dt * 3.2);
+        } else if (cur > t + 0.4) {
+          cur += (t - cur) * Math.min(1, dt * 2);
+        }
+        cur = Math.min(ceiling, Math.max(0, cur));
       }
 
-      if (Math.abs(cur - shownRef.current) > 0.05 || cur === 100) {
+      if (Math.abs(cur - shownRef.current) > 0.04 || cur === 100) {
         shownRef.current = cur;
         setShown(cur);
       } else {

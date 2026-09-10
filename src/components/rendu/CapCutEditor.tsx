@@ -457,6 +457,8 @@ export function CapCutEditor({
       stroke: fontStyle.stroke,
       bg: fontStyle.bg,
       bgAlpha: fontStyle.bgAlpha,
+      enter: "fade",
+      exit: "fade",
     };
     const nextTexts = [...textsRef.current, layer];
     textsRef.current = nextTexts;
@@ -1518,8 +1520,8 @@ export function CapCutEditor({
                 </span>
                 <span className="block truncate text-[10px] text-muted">
                   {lockFont
-                    ? "Couleur · taille · effet"
-                    : "Police · taille · couleur"}
+                    ? "Couleur · effet · entrée / sortie"
+                    : "Police · couleur · entrée / sortie"}
                 </span>
               </span>
               {styleOpen ? (
@@ -1630,62 +1632,117 @@ export function CapCutEditor({
                         },
                       },
                     ] as const
-                  ).map((fx) => (
-                    <button
-                      key={fx.id}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => {
-                        pushHistory();
-                        updateText(selectedText.id, { ...fx.patch });
-                      }}
-                      className="rounded-lg border border-border bg-surface px-3 py-1.5 text-[11px] font-medium tracking-wide text-pearl uppercase hover:border-gold/40"
-                    >
-                      {fx.label}
-                    </button>
-                  ))}
+                  ).map((fx) => {
+                    const stroke = selectedText.stroke ?? DEFAULT_TEXT_STROKE;
+                    const bgA = selectedText.bgAlpha ?? 0;
+                    const hasBg = Boolean(selectedText.bg) && bgA > 0.02;
+                    const active =
+                      (fx.id === "soft" &&
+                        stroke === "dark" &&
+                        !hasBg) ||
+                      (fx.id === "outline" &&
+                        stroke === "light" &&
+                        !hasBg) ||
+                      (fx.id === "banner" && hasBg) ||
+                      (fx.id === "gold" && stroke === "gold" && !hasBg);
+                    return (
+                      <button
+                        key={fx.id}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => {
+                          pushHistory();
+                          updateText(selectedText.id, { ...fx.patch });
+                        }}
+                        className={cn(
+                          "rounded-lg border px-3 py-1.5 text-[11px] font-medium tracking-wide uppercase",
+                          active
+                            ? "border-gold/50 bg-gold-soft text-pearl"
+                            : "border-border bg-surface text-pearl hover:border-gold/40",
+                        )}
+                      >
+                        {fx.label}
+                      </button>
+                    );
+                  })}
                 </div>
               ) : null}
 
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    pushHistory();
-                    updateText(selectedText.id, {
-                      scale: clampTextScale(
-                        (selectedText.scale ?? DEFAULT_TEXT_SCALE) - 0.1,
-                      ),
-                    });
-                  }}
-                  className="flex h-10 min-w-12 items-center justify-center rounded-lg border border-border bg-surface text-[13px] font-semibold text-pearl hover:border-gold/40 disabled:opacity-40"
-                  aria-label="Réduire la police"
-                >
-                  A−
-                </button>
-                <span className="min-w-12 text-center text-[12px] tabular-nums text-muted-strong">
-                  {Math.round(
-                    (selectedText.scale ?? DEFAULT_TEXT_SCALE) * 100,
-                  )}
-                  %
-                </span>
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    pushHistory();
-                    updateText(selectedText.id, {
-                      scale: clampTextScale(
-                        (selectedText.scale ?? DEFAULT_TEXT_SCALE) + 0.1,
-                      ),
-                    });
-                  }}
-                  className="flex h-10 min-w-12 items-center justify-center rounded-lg border border-border bg-surface text-[15px] font-semibold text-pearl hover:border-gold/40 disabled:opacity-40"
-                  aria-label="Agrandir la police"
-                >
-                  A+
-                </button>
+              <div className="space-y-2">
+                <div>
+                  <p className="mb-1 text-center text-[10px] tracking-wide text-muted uppercase">
+                    Entrée
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-1.5">
+                    {(
+                      [
+                        { id: "none", label: "Aucune" },
+                        { id: "fade", label: "Fondu" },
+                        { id: "rise", label: "Montée" },
+                        { id: "pop", label: "Pop" },
+                      ] as const
+                    ).map((opt) => {
+                      const active =
+                        (selectedText.enter ?? "fade") === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            pushHistory();
+                            updateText(selectedText.id, { enter: opt.id });
+                          }}
+                          className={cn(
+                            "rounded-lg border px-2.5 py-1.5 text-[11px] font-medium",
+                            active
+                              ? "border-gold/50 bg-gold-soft text-pearl"
+                              : "border-border bg-surface text-muted-strong hover:border-gold/40",
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1 text-center text-[10px] tracking-wide text-muted uppercase">
+                    Sortie
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-1.5">
+                    {(
+                      [
+                        { id: "none", label: "Aucune" },
+                        { id: "fade", label: "Fondu" },
+                        { id: "fall", label: "Descente" },
+                        { id: "pop", label: "Pop" },
+                      ] as const
+                    ).map((opt) => {
+                      const active =
+                        (selectedText.exit ?? "fade") === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            pushHistory();
+                            updateText(selectedText.id, { exit: opt.id });
+                          }}
+                          className={cn(
+                            "rounded-lg border px-2.5 py-1.5 text-[11px] font-medium",
+                            active
+                              ? "border-gold/50 bg-gold-soft text-pearl"
+                              : "border-border bg-surface text-muted-strong hover:border-gold/40",
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-wrap justify-center gap-1.5">

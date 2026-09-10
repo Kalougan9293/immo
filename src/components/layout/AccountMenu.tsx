@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Moon, Sun } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
 import { useTheme } from "@/lib/theme";
@@ -63,6 +64,15 @@ export function AccountMenu({ name, email, onHero = false }: AccountMenuProps) {
             <p className="truncate text-[13px] font-medium text-pearl">{name}</p>
             <p className="mt-0.5 truncate text-[11px] text-muted">{email}</p>
           </div>
+
+          <Link
+            href="/compte"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block w-full border-b border-border px-4 py-3 text-center text-[13px] text-pearl transition-colors hover:bg-[var(--menu-hover)]"
+          >
+            {t.compte.yourVideos}
+          </Link>
 
           <div className="flex items-center justify-center gap-2 border-b border-border px-4 py-2.5">
             <span className="text-[10px] tracking-[0.08em] text-muted uppercase">

@@ -33,12 +33,12 @@ export const RECIPES: Record<TemplateId, RenderRecipe> = {
   "dynamic-reel": {
     imageSeconds: 3.6,
     videoMaxSeconds: 4.5,
-    fadeSeconds: 0.55,
-    kenBurnsZoom: 1.05,
-    zoomSpeed: 1.2,
-    motion: "crawl",
+    fadeSeconds: 0.22,
+    kenBurnsZoom: 1.08,
+    zoomSpeed: 0.85,
+    motion: "glide",
     transition: "fadeblack",
-    grade: { brightness: 0.0, contrast: 1.12, saturation: 0.88 },
+    grade: { brightness: 0.03, contrast: 1.24, saturation: 0.96 },
   },
   "dynamic-marina": {
     imageSeconds: 3.0,

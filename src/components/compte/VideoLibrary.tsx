@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { saveUploadSession, type UploadedMedia } from "@/lib/storage";
 import { downloadFile } from "@/lib/download";
 import { DEFAULT_TEMPLATE_ID } from "@/lib/product";
+import { useT } from "@/components/i18n/I18nProvider";
 
 type VideoLibraryProps = {
   videos: LibraryVideo[];
@@ -27,6 +28,7 @@ type VideoLibraryProps = {
 type LocalVideo = LibraryVideo;
 
 export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
+  const t = useT();
   const router = useRouter();
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [videos, setVideos] = useState<LocalVideo[]>(initial);
@@ -188,16 +190,11 @@ export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
 
   if (videos.length === 0) {
     return (
-      <div className="workspace-empty flex flex-1 flex-col items-center justify-center rounded-[1.5rem] px-6 py-12">
-        <div className="flex size-12 items-center justify-center rounded-2xl border border-border bg-surface text-muted-strong">
-          <Film className="size-5" strokeWidth={1.5} />
-        </div>
-        <p className="mt-5 text-center text-[14px] font-medium tracking-wide text-pearl">
-          Aucune création pour l’instant
+      <div className="mb-2">
+        <p className="mb-3 text-[12px] tracking-wide text-muted">
+          {t.compte.yourVideos}
         </p>
-        <p className="mt-2 max-w-[220px] text-center text-[12px] leading-relaxed text-muted">
-          Vos vidéos s’afficheront ici après génération.
-        </p>
+        <p className="text-[13px] text-muted">{t.compte.empty}</p>
       </div>
     );
   }
@@ -205,7 +202,7 @@ export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
   return (
     <>
       <p className="mb-3 text-[12px] tracking-wide text-muted">
-        {videos.length} vidéo{videos.length > 1 ? "s" : ""}
+        {t.compte.yourVideos} · {videos.length}
       </p>
       <ul className="grid grid-cols-3 gap-2.5 sm:gap-3">
         {videos.map((video) => (
