@@ -10,7 +10,7 @@ type MediasPageProps = {
 };
 
 export const metadata = {
-  title: "Ajouter vos médias — ARÉO",
+  title: "Ajouter vos photos — ARÉO",
   description: "Importez vos photos pour générer votre film.",
 };
 

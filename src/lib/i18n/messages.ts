@@ -26,6 +26,7 @@ export type Messages = {
     myAccount: string;
     copyright: string;
     legalNav: string;
+    pricing: string;
     terms: string;
     sales: string;
     mentions: string;
@@ -73,7 +74,6 @@ export type Messages = {
     step: string;
     title: string;
     hint: string;
-    hintDynamic: string;
     dropTitle: string;
     dropHint: string;
     browse: string;
@@ -92,6 +92,28 @@ export type Messages = {
     createVideo: string;
     yourVideos: string;
     empty: string;
+    remainingShort: string;
+    remainingShortOne: string;
+    cancel: string;
+    cancelSoon: string;
+  };
+  pricing: {
+    title: string;
+    monthly: string;
+    videos: string;
+    photos: string;
+    format: string;
+    cta: string;
+    starterCta: string;
+    current: string;
+    recommended: string;
+    starter: string;
+    starterBadge: string;
+    starterPitch: string;
+    pro: string;
+    proPitch: string;
+    agence: string;
+    agencePitch: string;
   };
   editor: {
     play: string;
@@ -125,7 +147,7 @@ export const fr: Messages = {
   meta: {
     title: "ARÉO — Vidéos immobilières en 1 minute",
     description:
-      "Déposez vos médias. Votre vidéo pro est prête en 1 minute. Générateur automatique de vidéos immobilières haut de gamme.",
+      "Déposez vos photos. Votre vidéo pro est prête en 1 minute. Générateur automatique de vidéos immobilières haut de gamme.",
   },
   common: {
     back: "Retour",
@@ -140,7 +162,7 @@ export const fr: Messages = {
     switchTo: "Langue",
   },
   home: {
-    tagline: "Déposez vos médias.",
+    tagline: "Déposez vos photos.",
     taglineStrong: "Votre vidéo pro est prête en 1 minute.",
     cta: "Créer ma vidéo",
     signIn: "Se connecter",
@@ -148,6 +170,7 @@ export const fr: Messages = {
     myAccount: "Mon compte",
     copyright: "© 2026 ARÉO — Tous droits réservés",
     legalNav: "Mentions légales",
+    pricing: "Tarifs",
     terms: "CGU",
     sales: "CGV",
     mentions: "Mentions",
@@ -158,9 +181,9 @@ export const fr: Messages = {
     password: "Mot de passe",
     signInTitle: "Connexion",
     signUpTitle: "Inscription",
-    signInHint: "Retrouvez jusqu’à 3 vidéos sauvegardées sur votre compte.",
+    signInHint: "Starter 10 € : 2 vidéos / mois, reel vertical HD 8–15 s.",
     signUpHint:
-      "Sauvegardez jusqu’à 3 vidéos. La plus ancienne est remplacée automatiquement.",
+      "Commencez à 10 € : 2 vidéos / mois, 4 à 12 photos, 8–15 s.",
     signIn: "Se connecter",
     signingIn: "Connexion…",
     createAccount: "Créer un compte",
@@ -217,16 +240,15 @@ export const fr: Messages = {
   },
   media: {
     step: "Étape 1",
-    title: "Médias",
-    hint: "4 à 12 photos",
-    hintDynamic: "4–12 photos — cinema IA Veo Lite, reel 8–12 s.",
-    dropTitle: "Déposez vos photos",
-    dropHint: "JPG, PNG, HEIC…",
+    title: "Photos",
+    hint: "4 à 12 photos — reel vertical HD, 8 à 15 s",
+    dropTitle: "Ajoutez vos photos",
+    dropHint: "Touchez pour choisir, ou déposez-les (PC)",
     browse: "Parcourir",
     addMore: "Ajouter",
     continueEdit: "Continuer",
     preparing: "Préparation…",
-    uploading: "Envoi des médias…",
+    uploading: "Envoi des photos…",
     openingEditor: "Ouverture…",
     reorder: "Réordonner",
     moveEarlier: "Monter",
@@ -238,6 +260,28 @@ export const fr: Messages = {
     createVideo: "Créer une vidéo",
     yourVideos: "Vos vidéos",
     empty: "Aucune vidéo pour l’instant.",
+    remainingShort: "restantes",
+    remainingShortOne: "restante",
+    cancel: "Résilier",
+    cancelSoon: "Bientôt",
+  },
+  pricing: {
+    title: "Tarifs",
+    monthly: "/ mois",
+    videos: "vidéos / mois",
+    photos: "4 à 12 photos par vidéo",
+    format: "Reel vertical HD · 8 à 15 s",
+    cta: "Choisir",
+    starterCta: "Commencer",
+    current: "Offre actuelle",
+    recommended: "Le plus choisi",
+    starter: "Starter",
+    starterBadge: "Pour commencer",
+    starterPitch: "2 films pour tester — simple, sans prise de tête",
+    pro: "Pro",
+    proPitch: "Quand un bien par semaine ne suffit plus",
+    agence: "Agence",
+    agencePitch: "Le volume d’une équipe",
   },
   editor: {
     play: "Lecture",
@@ -271,7 +315,7 @@ export const en: Messages = {
   meta: {
     title: "ARÉO — Pro property videos in 1 minute",
     description:
-      "Drop your media. Your pro video is ready in 1 minute. Automatic high-end real-estate video generator.",
+      "Drop your photos. Your pro video is ready in 1 minute. Automatic high-end real-estate video generator.",
   },
   common: {
     back: "Back",
@@ -286,7 +330,7 @@ export const en: Messages = {
     switchTo: "Language",
   },
   home: {
-    tagline: "Drop your media.",
+    tagline: "Drop your photos.",
     taglineStrong: "Your pro video is ready in 1 minute.",
     cta: "Create my video",
     signIn: "Sign in",
@@ -294,6 +338,7 @@ export const en: Messages = {
     myAccount: "My account",
     copyright: "© 2026 ARÉO — All rights reserved",
     legalNav: "Legal",
+    pricing: "Pricing",
     terms: "Terms",
     sales: "Sales terms",
     mentions: "Legal notice",
@@ -304,9 +349,9 @@ export const en: Messages = {
     password: "Password",
     signInTitle: "Sign in",
     signUpTitle: "Sign up",
-    signInHint: "Access up to 3 videos saved on your account.",
+    signInHint: "Starter €10: 2 videos / month, vertical HD reel 8–15 s.",
     signUpHint:
-      "Save up to 3 videos. The oldest one is replaced automatically.",
+      "Start at €10: 2 videos / month, 4 to 12 photos, 8–15 s.",
     signIn: "Sign in",
     signingIn: "Signing in…",
     createAccount: "Create account",
@@ -363,16 +408,15 @@ export const en: Messages = {
   },
   media: {
     step: "Step 1",
-    title: "Media",
-    hint: "4 to 12 photos",
-    hintDynamic: "4–12 photos — Veo Lite AI cinema, 8–12 s reel.",
-    dropTitle: "Drop your photos",
-    dropHint: "JPG, PNG, HEIC…",
+    title: "Photos",
+    hint: "4 to 12 photos — vertical HD reel, 8 to 15 s",
+    dropTitle: "Add your photos",
+    dropHint: "Tap to choose, or drop them (desktop)",
     browse: "Browse",
     addMore: "Add",
     continueEdit: "Continue",
     preparing: "Preparing…",
-    uploading: "Uploading media…",
+    uploading: "Uploading photos…",
     openingEditor: "Opening…",
     reorder: "Reorder",
     moveEarlier: "Move up",
@@ -384,6 +428,28 @@ export const en: Messages = {
     createVideo: "Create a video",
     yourVideos: "Your videos",
     empty: "No videos yet.",
+    remainingShort: "left",
+    remainingShortOne: "left",
+    cancel: "Cancel plan",
+    cancelSoon: "Soon",
+  },
+  pricing: {
+    title: "Pricing",
+    monthly: "/ month",
+    videos: "videos / month",
+    photos: "4 to 12 photos per video",
+    format: "Vertical HD reel · 8 to 15 s",
+    cta: "Choose",
+    starterCta: "Get started",
+    current: "Current plan",
+    recommended: "Most popular",
+    starter: "Starter",
+    starterBadge: "Start here",
+    starterPitch: "2 films to try — simple, no fuss",
+    pro: "Pro",
+    proPitch: "When one listing a week isn’t enough",
+    agence: "Agency",
+    agencePitch: "Volume for a team",
   },
   editor: {
     play: "Play",

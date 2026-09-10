@@ -509,11 +509,8 @@ export function TextStudio({ templateId }: TextStudioProps) {
   return (
     <div className="relative flex flex-1 flex-col pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
       <div className="animate-fade-up px-5 pt-1 text-center sm:px-8">
-        <p className="text-[11px] font-medium tracking-[0.2em] text-muted uppercase">
-          Étape 2
-        </p>
-        <h2 className="mt-1.5 font-display text-3xl font-medium tracking-tight text-pearl sm:text-4xl">
-          Textes
+        <h2 className="font-display text-3xl font-medium tracking-tight text-pearl sm:text-4xl">
+          {t.writing.title}
         </h2>
         <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted">
           La taille et le rythme se gèrent dans la session d’après !

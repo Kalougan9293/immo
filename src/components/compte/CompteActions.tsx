@@ -1,31 +1,38 @@
 "use client";
 
-import { Sparkles, Film } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import Link from "next/link";
 import { useT } from "@/components/i18n/I18nProvider";
+import { cn } from "@/lib/utils";
 
-export function CompteActions() {
+type CompteActionsProps = {
+  quotaFull?: boolean;
+};
+
+export function CompteActions({ quotaFull = false }: CompteActionsProps) {
   const t = useT();
+  const tabClass =
+    "flex h-11 items-center justify-center rounded-xl px-2 text-center text-[13px] font-semibold tracking-wide transition-colors";
+
   return (
-    <div className="flex flex-col gap-3">
-      <Button
-        href="/creer"
-        fullWidth
-        showArrow
-        icon={Sparkles}
-        className="text-[15px] font-bold tracking-[0.05em] text-white"
-      >
-        {t.compte.createVideo}
-      </Button>
-      <Button
-        href="#vos-videos"
-        fullWidth
-        variant="ghost"
-        icon={Film}
-        className="border-border-strong bg-surface text-[15px] font-semibold tracking-wide text-pearl hover:bg-surface-elevated"
+    <div className="grid grid-cols-2 gap-1 rounded-2xl border border-border bg-surface p-1">
+      {quotaFull ? (
+        <span className={cn(tabClass, "cursor-not-allowed text-muted/50")}>
+          {t.compte.createVideo}
+        </span>
+      ) : (
+        <Link
+          href="/creer"
+          className={cn(tabClass, "text-pearl hover:bg-surface-elevated")}
+        >
+          {t.compte.createVideo}
+        </Link>
+      )}
+      <span
+        className={cn(tabClass, "bg-gold-soft text-pearl")}
+        aria-current="page"
       >
         {t.compte.yourVideos}
-      </Button>
+      </span>
     </div>
   );
 }

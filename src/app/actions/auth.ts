@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { parsePlanId, PLAN_META_KEY } from "@/lib/billing";
 
 export type AuthState = {
   error?: string;
@@ -46,7 +47,10 @@ export async function signUp(
     email,
     password,
     options: {
-      data: { full_name: name || null },
+      data: {
+        full_name: name || null,
+        [PLAN_META_KEY]: parsePlanId(formData.get("plan")),
+      },
     },
   });
 

@@ -10,10 +10,7 @@ import {
   renderFolderFromMediaPath,
 } from "@/lib/render/ffmpeg";
 import { normalizeEditOptions } from "@/lib/render/edit-options";
-import {
-  getVideosToEvict,
-  MAX_SAVED_VIDEOS_PER_ACCOUNT,
-} from "@/lib/video-retention";
+import { getVideosToEvict } from "@/lib/video-retention";
 import { getTemplateById } from "@/data/templates";
 import {
   MAX_MEDIAS_PER_VIDEO,
@@ -33,9 +30,11 @@ import {
   patchRenderJob,
   type RenderJobResult,
 } from "@/lib/render/jobs";
+import { getAccountBillingForUser, recordQuotaGeneration } from "@/lib/billing-account";
+import { quotaFullMessage } from "@/lib/billing";
 
 export const runtime = "nodejs";
-/** Veo Lite : marge pour jusqu'a 12 photos (job en arrière-plan). */
+/** Veo Fast : jusqu’à 12 clips (job en arrière-plan). */
 export const maxDuration = 800;
 
 type MediaPayload = {
@@ -180,6 +179,33 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabase.auth.getUser();
 
+    const consumesQuota =
+      mode === "generate" && !replaceVideoId;
+    let libraryLimit = 2;
+
+    if (consumesQuota) {
+      if (!user) {
+        return NextResponse.json(
+          {
+            error:
+              "Connectez-vous pour générer une vidéo (quota mensuel selon l’offre).",
+          },
+          { status: 401 },
+        );
+      }
+      const billing = await getAccountBillingForUser(supabase, user);
+      libraryLimit = billing.plan.videosPerMonth;
+      if (billing.remaining <= 0) {
+        return NextResponse.json(
+          { error: quotaFullMessage(billing.plan) },
+          { status: 403 },
+        );
+      }
+    } else if (user) {
+      const billing = await getAccountBillingForUser(supabase, user);
+      libraryLimit = billing.plan.videosPerMonth;
+    }
+
     const job = createRenderJob();
     const work = executeRenderJob({
       jobId: job.id,
@@ -193,6 +219,7 @@ export async function POST(request: Request) {
       coverPath,
       userId: user?.id ?? null,
       supabase,
+      libraryLimit,
     });
     after(async () => {
       await work;
@@ -222,6 +249,7 @@ async function executeRenderJob(input: {
   coverPath: string | null;
   userId: string | null;
   supabase: Supabase;
+  libraryLimit: number;
 }) {
   const {
     jobId,
@@ -234,6 +262,7 @@ async function executeRenderJob(input: {
     replaceVideoId,
     userId,
     supabase,
+    libraryLimit,
   } = input;
 
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "areo-dl-"));
@@ -448,7 +477,7 @@ async function executeRenderJob(input: {
           storage_path: row.storage_path as string,
         })),
         1,
-        MAX_SAVED_VIDEOS_PER_ACCOUNT,
+        libraryLimit,
       );
 
       for (const old of toEvict) {
@@ -475,6 +504,7 @@ async function executeRenderJob(input: {
 
       if (insertError) throw new Error(insertError.message);
       savedVideoId = inserted.id as string;
+      await recordQuotaGeneration(supabase, userId);
     }
 
     if (!coverPath) {

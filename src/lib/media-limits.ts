@@ -1,8 +1,8 @@
-﻿/** Limites medias — 4 à 12 photos Veo Lite, pas de vidéo user. */
+﻿/** Limites medias — 4 à 12 photos, toutes en Veo Fast. Pas de vidéo user. */
 
 import { TARGET_REEL_SECONDS } from "@/lib/product";
 
-/** Min agents : 4 photos. Max : 12 (Lite tient le coût). */
+/** Min 4 / max 12. Chaque photo = 1 clip Veo Fast. */
 export const MIN_PHOTOS_PER_REEL = 4;
 export const MAX_PHOTOS_PER_REEL = 12;
 
@@ -41,12 +41,14 @@ export function detectMediaKind(file: {
   type?: string;
   name: string;
 }): MediaKind {
-  const type = file.type ?? "";
+  const type = (file.type ?? "").toLowerCase();
   if (type.startsWith("image/")) return "image";
   if (type.startsWith("video/")) return "video";
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext && IMAGE_EXTS.includes(ext)) return "image";
   if (ext && VIDEO_EXTS.includes(ext)) return "video";
+  // iOS / Android : type vide, nom sans extension (IMG_1234)
+  if (!type || type === "application/octet-stream") return "image";
   return "other";
 }
 

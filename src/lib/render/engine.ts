@@ -4,13 +4,13 @@ import { getTemplateById } from "@/data/templates";
 export type RenderEngine = "ffmpeg" | "veo-fast";
 
 /** Fallback si template inconnu. */
-export const DEFAULT_RENDER_ENGINE: RenderEngine = "ffmpeg";
+export const DEFAULT_RENDER_ENGINE: RenderEngine = "veo-fast";
 
-/** DYNAMIC → Veo Fast ; CLASSIC → Ken Burns FFmpeg. */
+/** Produit : Veo Fast. CLASSIC (ffmpeg) seulement si un vieux template est encore appelé. */
 export function engineForTemplate(templateId: string): RenderEngine {
   const template = getTemplateById(templateId);
-  if (template?.category === "dynamic") return "veo-fast";
-  return "ffmpeg";
+  if (template?.category === "classic") return "ffmpeg";
+  return "veo-fast";
 }
 
 export function parseRenderEngine(value: unknown): RenderEngine | null {

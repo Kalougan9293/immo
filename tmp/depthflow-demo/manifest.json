@@ -1,0 +1,20 @@
+[
+  {
+    "id": "couloir",
+    "photo": "D:\\Desktop\\IMMO\\public\\examples\\visite-prestige.jpg",
+    "depth": "D:\\Desktop\\IMMO\\tmp\\depthflow-demo\\depth\\couloir.png",
+    "model": "fal-ai/image-preprocessors/depth-anything/v2"
+  },
+  {
+    "id": "chambre",
+    "photo": "D:\\Desktop\\IMMO\\public\\templates\\demo-sources\\paris\\04.jpg",
+    "depth": "D:\\Desktop\\IMMO\\tmp\\depthflow-demo\\depth\\chambre.png",
+    "model": "fal-ai/image-preprocessors/depth-anything/v2"
+  },
+  {
+    "id": "cuisine",
+    "photo": "D:\\Desktop\\IMMO\\public\\templates\\demo-sources\\paris\\03.jpg",
+    "depth": "D:\\Desktop\\IMMO\\tmp\\depthflow-demo\\depth\\cuisine.png",
+    "model": "fal-ai/image-preprocessors/depth-anything/v2"
+  }
+]

@@ -71,7 +71,16 @@ export function AccountMenu({ name, email, onHero = false }: AccountMenuProps) {
             onClick={() => setOpen(false)}
             className="block w-full border-b border-border px-4 py-3 text-center text-[13px] text-pearl transition-colors hover:bg-[var(--menu-hover)]"
           >
-            {t.compte.yourVideos}
+            {t.common.account}
+          </Link>
+
+          <Link
+            href="/tarifs"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block w-full border-b border-border px-4 py-3 text-center text-[13px] text-pearl transition-colors hover:bg-[var(--menu-hover)]"
+          >
+            {t.home.pricing}
           </Link>
 
           <div className="flex items-center justify-center gap-2 border-b border-border px-4 py-2.5">

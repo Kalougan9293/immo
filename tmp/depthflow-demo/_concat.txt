@@ -1,0 +1,7 @@
+file 'D:/Desktop/IMMO/tmp/depthflow-demo/title.mp4'
+file 'D:/Desktop/IMMO/tmp/depthflow-demo/clips/couloir-kenburns-l.mp4'
+file 'D:/Desktop/IMMO/tmp/depthflow-demo/clips/couloir-depthflow-l.mp4'
+file 'D:/Desktop/IMMO/tmp/depthflow-demo/clips/chambre-kenburns-l.mp4'
+file 'D:/Desktop/IMMO/tmp/depthflow-demo/clips/chambre-depthflow-l.mp4'
+file 'D:/Desktop/IMMO/tmp/depthflow-demo/clips/cuisine-kenburns-l.mp4'
+file 'D:/Desktop/IMMO/tmp/depthflow-demo/clips/cuisine-depthflow-l.mp4'

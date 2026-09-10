@@ -6,7 +6,7 @@ export const metadata = {
   description: "Importez vos photos pour générer votre Reel immobilier.",
 };
 
-/** Plus de choix de modèle — entrée directe aux médias. */
+/** Plus de choix de modèle — entrée directe aux photos. */
 export default function CreerPage() {
   redirect(`/creer/medias?template=${DEFAULT_TEMPLATE_ID}`);
 }

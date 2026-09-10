@@ -1,9 +1,11 @@
 /**
- * Règle MVP de conservation des vidéos par compte.
- * Max 3 vidéos : au-delà, la plus ancienne est supprimée (FIFO).
+ * Conservation bibliothèque = quota du plan (Starter 2 / Pro 5 / Agence 15).
+ * Au-delà, la plus ancienne est supprimée (FIFO).
  */
 
-export const MAX_SAVED_VIDEOS_PER_ACCOUNT = 3;
+import { PLANS } from "@/lib/billing";
+
+export const MAX_SAVED_VIDEOS_PER_ACCOUNT = PLANS.agence.videosPerMonth;
 
 export type SavedVideoRef = {
   id: string;
@@ -31,6 +33,7 @@ export function getVideosToEvict<T extends SavedVideoRef>(
 }
 
 export const VIDEO_RETENTION_COPY = {
-  short: `Jusqu’à ${MAX_SAVED_VIDEOS_PER_ACCOUNT} vidéos sauvegardées`,
-  detail: `Chaque compte conserve jusqu’à ${MAX_SAVED_VIDEOS_PER_ACCOUNT} vidéos. Au-delà, la plus ancienne est remplacée automatiquement.`,
+  short: "Vidéos du mois selon votre offre",
+  detail:
+    "Chaque offre fixe un nombre de vidéos par mois. Au-delà du plafond de conservation, la plus ancienne est remplacée.",
 } as const;

@@ -39,27 +39,27 @@ export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
     "rename" | "cover" | "redo" | "download" | "delete" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const active = videos.find((v) => v.id === activeId) ?? null;
+  const pendingDelete = videos.find((v) => v.id === pendingDeleteId) ?? null;
 
   useEffect(() => {
     setVideos(initial);
   }, [initial]);
 
   useEffect(() => {
-    if (!active) {
+    if (!active && !pendingDelete) {
       setEditingTitle(false);
       setError(null);
-      setConfirmDelete(false);
       return;
     }
-    setTitleDraft(active.title);
+    if (active) setTitleDraft(active.title);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (confirmDelete) setConfirmDelete(false);
+        if (pendingDeleteId) setPendingDeleteId(null);
         else setActiveId(null);
       }
     };
@@ -68,7 +68,7 @@ export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
-  }, [active, confirmDelete]);
+  }, [active, pendingDelete, pendingDeleteId]);
 
   const updateLocal = useCallback((id: string, patch: Partial<LocalVideo>) => {
     setVideos((prev) =>
@@ -170,43 +170,37 @@ export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
   };
 
   const deleteVideo = async () => {
-    if (!active || busy) return;
+    if (!pendingDelete || busy) return;
 
     setBusy("delete");
     setError(null);
     try {
-      const res = await fetch(`/api/videos/${active.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/videos/${pendingDelete.id}`, {
+        method: "DELETE",
+      });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Échec de la suppression.");
-      setVideos((prev) => prev.filter((v) => v.id !== active.id));
-      setConfirmDelete(false);
-      setActiveId(null);
+      const deletedId = pendingDelete.id;
+      setVideos((prev) => prev.filter((v) => v.id !== deletedId));
+      setPendingDeleteId(null);
+      if (activeId === deletedId) setActiveId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur suppression.");
       setBusy(null);
-      setConfirmDelete(false);
     }
   };
 
   if (videos.length === 0) {
     return (
-      <div className="mb-2">
-        <p className="mb-3 text-[12px] tracking-wide text-muted">
-          {t.compte.yourVideos}
-        </p>
-        <p className="text-[13px] text-muted">{t.compte.empty}</p>
-      </div>
+      <p className="text-center text-[13px] text-muted">{t.compte.empty}</p>
     );
   }
 
   return (
     <>
-      <p className="mb-3 text-[12px] tracking-wide text-muted">
-        {t.compte.yourVideos} · {videos.length}
-      </p>
       <ul className="grid grid-cols-3 gap-2.5 sm:gap-3">
         {videos.map((video) => (
-          <li key={video.id}>
+          <li key={video.id} className="relative">
             <button
               type="button"
               onClick={() => setActiveId(video.id)}
@@ -240,9 +234,18 @@ export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
               <span className="absolute top-1/2 left-1/2 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/45 text-white opacity-90 backdrop-blur-sm transition-opacity group-hover:opacity-100">
                 <Play className="size-3.5 fill-current" strokeWidth={0} />
               </span>
-              <span className="absolute inset-x-0 bottom-0 truncate px-2 pb-2 text-[10px] font-medium text-white/95">
+              <span className="absolute inset-x-0 bottom-0 truncate px-2 pb-2 pr-8 text-[10px] font-medium text-white/95">
                 {video.title}
               </span>
+            </button>
+            <button
+              type="button"
+              aria-label={`Effacer ${video.title}`}
+              disabled={Boolean(busy)}
+              onClick={() => setPendingDeleteId(video.id)}
+              className="absolute top-1.5 right-1.5 z-10 flex size-7 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white/90 backdrop-blur-sm transition-colors hover:bg-red-500/40 hover:text-white"
+            >
+              <Trash2 className="size-3.5" strokeWidth={1.75} />
             </button>
           </li>
         ))}
@@ -407,7 +410,7 @@ export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
                       "text-red-400 hover:text-red-300",
                       busy === "delete" && "[&_svg]:animate-spin",
                     )}
-                    onClick={() => setConfirmDelete(true)}
+                    onClick={() => setPendingDeleteId(active.id)}
                   >
                     Effacer
                   </Button>
@@ -415,50 +418,55 @@ export function VideoLibrary({ videos: initial }: VideoLibraryProps) {
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
 
-          {confirmDelete ? (
-            <div
-              className="animate-fade-in absolute inset-0 z-20 flex items-center justify-center bg-black/70 px-6 backdrop-blur-sm"
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="delete-confirm-title"
+      {pendingDelete ? (
+        <div
+          className="animate-fade-in fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-6 backdrop-blur-sm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-confirm-title"
+        >
+          <div className="w-full max-w-xs rounded-2xl border border-border bg-surface p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+            <p
+              id="delete-confirm-title"
+              className="text-center font-display text-xl font-medium text-pearl"
             >
-              <div className="w-full max-w-xs rounded-2xl border border-border bg-surface p-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
-                <p
-                  id="delete-confirm-title"
-                  className="text-center font-display text-xl font-medium text-pearl"
-                >
-                  Êtes-vous sûr ?
-                </p>
-                <p className="mt-2 text-center text-[13px] leading-relaxed text-muted">
-                  Cette vidéo sera définitivement effacée.
-                </p>
-                <div className="mt-5 grid grid-cols-2 gap-2">
-                  <Button
-                    fullWidth
-                    variant="ghost"
-                    disabled={busy === "delete"}
-                    onClick={() => setConfirmDelete(false)}
-                  >
-                    Non
-                  </Button>
-                  <Button
-                    fullWidth
-                    variant="gold"
-                    disabled={busy === "delete"}
-                    icon={busy === "delete" ? Loader2 : undefined}
-                    className={cn(
-                      "border-red-400/40 bg-red-500/15 text-red-200 hover:border-red-400/60 hover:bg-red-500/25",
-                      busy === "delete" && "[&_svg]:animate-spin",
-                    )}
-                    onClick={() => void deleteVideo()}
-                  >
-                    Oui
-                  </Button>
-                </div>
-              </div>
+              Êtes-vous sûr ?
+            </p>
+            <p className="mt-2 text-center text-[13px] leading-relaxed text-muted">
+              Cette vidéo sera définitivement effacée.
+            </p>
+            {error ? (
+              <p className="mt-2 text-center text-[12px] text-red-400" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <Button
+                fullWidth
+                variant="ghost"
+                disabled={busy === "delete"}
+                onClick={() => setPendingDeleteId(null)}
+              >
+                Non
+              </Button>
+              <Button
+                fullWidth
+                variant="gold"
+                disabled={busy === "delete"}
+                icon={busy === "delete" ? Loader2 : undefined}
+                className={cn(
+                  "border-red-400/40 bg-red-500/15 text-red-200 hover:border-red-400/60 hover:bg-red-500/25",
+                  busy === "delete" && "[&_svg]:animate-spin",
+                )}
+                onClick={() => void deleteVideo()}
+              >
+                Oui
+              </Button>
             </div>
-          ) : null}
+          </div>
         </div>
       ) : null}
     </>

@@ -2,18 +2,23 @@
 
 import { useActionState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { signUp, type AuthState } from "@/app/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { useT } from "@/components/i18n/I18nProvider";
+import { parsePlanId } from "@/lib/billing";
 
 const initial: AuthState = {};
 
 export function SignUpForm() {
   const t = useT();
   const [state, action, pending] = useActionState(signUp, initial);
+  const search = useSearchParams();
+  const plan = parsePlanId(search.get("plan"));
 
   return (
     <form action={action} className="mt-8 space-y-3 text-left">
+      <input type="hidden" name="plan" value={plan} />
       <label className="block">
         <span className="mb-1.5 block text-[11px] tracking-[0.14em] text-muted uppercase">
           {t.auth.name}

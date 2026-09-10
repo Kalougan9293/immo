@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Play, X } from "lucide-react";
 import {
@@ -23,10 +23,18 @@ export function AccountExamples({
   const t = useT();
   const [active, setActive] = useState<AccountExample | null>(null);
   const [mounted, setMounted] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!active || !el) return;
+    el.muted = true;
+    void el.play().catch(() => undefined);
+  }, [active]);
 
   useEffect(() => {
     if (!active) return;
@@ -67,12 +75,15 @@ export function AccountExamples({
                 <X className="size-5" strokeWidth={1.75} />
               </button>
               <video
+                ref={videoRef}
                 key={active.video}
                 src={active.video}
                 playsInline
                 autoPlay
                 muted
                 loop
+                controls
+                preload="auto"
                 className="max-h-[75dvh] w-full rounded-2xl object-contain shadow-[0_20px_60px_rgba(0,0,0,0.5)]"
               />
             </div>

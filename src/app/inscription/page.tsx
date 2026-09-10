@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { Header } from "@/components/layout/Header";
 import { AppShell } from "@/components/layout/AppShell";
 import { SignUpForm } from "@/components/auth/SignUpForm";
@@ -23,7 +24,13 @@ export default function InscriptionPage() {
           </p>
 
           {ready ? (
-            <SignUpForm />
+            <Suspense
+              fallback={
+                <p className="mt-8 text-sm text-muted">{t.common.loading}</p>
+              }
+            >
+              <SignUpForm />
+            </Suspense>
           ) : (
             <div className="mt-8 rounded-2xl border border-border bg-surface px-5 py-6 text-left text-[13px] leading-relaxed text-muted">
               <p className="font-medium text-pearl">Configuration required</p>

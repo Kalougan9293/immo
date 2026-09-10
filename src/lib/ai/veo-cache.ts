@@ -4,7 +4,7 @@ import { AREO_MEDIA_BUCKET } from "@/lib/storage";
 import { VEO_I2V_MODEL } from "@/lib/ai/veo";
 
 /** Bump si le prompt / modèle Veo change — invalide l’ancien cache. */
-const VEO_CACHE_VERSION = "veo-lite-1080p-v1";
+const VEO_CACHE_VERSION = "veo-fast-1080p-v2-showreel";
 
 type StorageClient = {
   storage: {

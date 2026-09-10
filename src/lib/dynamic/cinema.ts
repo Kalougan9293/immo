@@ -34,29 +34,75 @@ export type CinemaStyle = {
 };
 
 const NO_EXTRAS =
-  "Rock-steady gimbal only — never handheld. Tack-sharp focus end-to-end, no motion smear, no zoom blur. No text, no people, no watermark, no logos.";
+  "Rock-steady gimbal / slider only — never handheld. Tack-sharp focus end-to-end, no motion smear, no zoom blur. No text, no people, no watermark, no logos.";
 
 /**
- * Réfs. exemples (visite prestige / villa / Haussmann) :
- * reveal d’entrée, push contrôlé, angle bas, contraste filmique, netteté.
+ * ADN des 3 exemples accueil (qualité, pas le décor à copier) :
+ * reveal de seuil, contre-plongée, axe vers le point le plus profond.
  */
+const SHOWREEL_LOOK =
+  "Luxury vertical 9:16 real-estate cinema, prestige agency showreel quality. Doorway / threshold reveals, slightly low angle for scale, axial push toward THIS photo’s own deepest focal point. Deep perspective, strong leading lines, filmic contrast, materials already in the frame (stone, wood, glass, water). Controlled gimbal — premium, not sleepy, not smear.";
+
 const EDITORIAL_LOOK =
-  "Luxury vertical real-estate cinema reel, 9:16, prestige listing tour like a high-end agency showreel: strong filmic contrast, deep perspective, warm architectural LEDs when present, polished marble / wood / stone textures, confident but CONTROLLED camera energy — premium, not sleepy, not smear-blur.";
+  "Mood: filmic contrast, warm architectural light when present, museum-steady prestige.";
 
 const PULSE_LOOK =
-  "Ultra-snappy TikTok real-estate cinema, 9:16, crisp high contrast, photoreal, locked gimbal, VERY SHORT punchy moves, social-media energy, fast tempo.";
+  "Mood: snappy social energy, still tack-sharp, compact moves.";
 
 const MARINA_LOOK =
-  "Bright lifestyle villa cinema, 9:16, blown-out high-key midday sun, airy photoreal, FLOATING Steadicam glide, sunny vacation prestige.";
+  "Mood: high-key midday sun, airy glass-and-water lifestyle, floating glide.";
 
 const NOIR_LOOK =
-  "Dark prestige real-estate cinema, 9:16, heavy low-key shadows, desaturated mood, photoreal, ALMOST FROZEN tripod, quiet drama, night-luxury stillness.";
+  "Mood: low-key shadow drama, quiet night-luxury stillness.";
 
 const BOLD_LOOK =
-  "Aggressive vertical real-estate cinema, 9:16, extreme high-contrast punch, photoreal, HARD locked moves toward architecture DETAIL, slam-impact energy.";
+  "Mood: high-contrast punch toward architectural detail.";
 
 const WARM_LOOK =
-  "Warm golden-hour real-estate cinema, 9:16, strong amber/orange light, soft photoreal, WIDE sweeping pans across the whole room, romantic soft prestige.";
+  "Mood: golden-hour amber, romantic prestige, warm interiors.";
+
+const OPENER_SHOT =
+  "OPENER: locked slider threshold REVEAL — smooth forward push through the nearest frame (balcony, doorway, arch, pool edge, hallway) into the deepest focal point. Constant speed, strong parallax, brief settle.";
+
+const CLOSER_SHOT =
+  "FINALE: locked slow push-in on the deepest hero of this photo (view, window, fireplace, pool, facade), then HOLD still for a prestige ending beat.";
+
+const SHOWREEL_SHOTS = [
+  OPENER_SHOT,
+  "SCALE: slightly low-angle locked forward glide selling volume — ceiling lines, floor or water reflections, architecture scale.",
+  "AXIS: locked center-axis advance down the enfilade / hallway / aisle / pool toward the hero view (window, fireplace, skyline, far room).",
+  "HERO: locked assertive push-in on the main subject (facade, island, staircase, fireplace, chandelier, water), then settle.",
+  "WALK: locked lateral drift with a gentle forward bias, as if walking the listing, leading lines alive, crisp parallax.",
+] as const;
+
+function showreelShot(clipIndex: number, photoCount: number): string {
+  const n = Math.max(1, photoCount);
+  if (clipIndex === 0) return OPENER_SHOT;
+  if (clipIndex === n - 1 && n > 1) return CLOSER_SHOT;
+  return SHOWREEL_SHOTS[1 + ((clipIndex - 1) % (SHOWREEL_SHOTS.length - 1))];
+}
+
+function showreelTempo(photoCount: number, slotSec?: number): string {
+  const n = Math.max(1, Math.floor(photoCount));
+  const sec =
+    slotSec ?? (n <= 5 ? 3.6 : n <= 8 ? 1.7 : 1.1);
+  if (n <= 5 || sec >= 3) {
+    return `Pacing: LONG TAKE (~${sec.toFixed(1)}s). Complete elegant move: begin, travel, 0.4s hold. Visible depth parallax. Confident — not a crawl, not a smash zoom.`;
+  }
+  if (n <= 8 || sec >= 1.4) {
+    return `Pacing: MEDIUM TAKE (~${sec.toFixed(1)}s). Compact complete move, already in motion at frame 1, short settle. Controlled prestige energy.`;
+  }
+  return `Pacing: SHORT TAKE (~${sec.toFixed(1)}s). One micro push or micro glide, single direction, no pan, no smear, firm settle.`;
+}
+
+function styleMood(id: CinemaStyleId): string {
+  if (id === "marina") return MARINA_LOOK;
+  if (id === "warm") return WARM_LOOK;
+  if (id === "pulse") return PULSE_LOOK;
+  if (id === "noir") return NOIR_LOOK;
+  if (id === "bold") return BOLD_LOOK;
+  return EDITORIAL_LOOK;
+}
 
 export const CINEMA_STYLES: Record<CinemaStyleId, CinemaStyle> = {
   /** Reveal · push contrôlé · refs exemples */
@@ -72,13 +118,7 @@ export const CINEMA_STYLES: Record<CinemaStyleId, CinemaStyle> = {
       "distance",
       "fadeblack",
     ],
-    motions: [
-      `${EDITORIAL_LOOK} Locked slider doorway / threshold REVEAL: smooth FORWARD PUSH into the deepest focal point (window, fireplace, skyline or far room), strong depth, constant controlled speed. ${NO_EXTRAS}`,
-      `${EDITORIAL_LOOK} Slightly LOW-ANGLE locked forward GLIDE that sells architecture scale — ceiling lines, floor reflections, pool or facade when present. ${NO_EXTRAS}`,
-      `${EDITORIAL_LOOK} Locked center-axis ADVANCE down a hallway / aisle / enfilade toward the hero view, museum-steady prestige reveal. ${NO_EXTRAS}`,
-      `${EDITORIAL_LOOK} Locked assertive PUSH-IN toward the main architectural hero (island, staircase, fireplace, chandelier), then brief settle. ${NO_EXTRAS}`,
-      `${EDITORIAL_LOOK} Locked lateral DRIFT with gentle forward bias, as if walking the room, leading lines alive, crisp parallax. ${NO_EXTRAS}`,
-    ],
+    motions: [...SHOWREEL_SHOTS],
     negative:
       "handheld shake, wobble, bobbing, motion smear, radial zoom blur, soft mushy focus, morphing furniture, invented objects, people, text, watermark, cartoon, warped walls, glacial meditative crawl, sleepy static frame",
     grade: { brightness: 0.03, contrast: 1.24, saturation: 0.96 },
@@ -89,9 +129,9 @@ export const CINEMA_STYLES: Record<CinemaStyleId, CinemaStyle> = {
     fadeSeconds: 0.08,
     transitions: ["slideleft", "wipeleft", "slideright", "wiperight", "slideleft"],
     motions: [
-      `${PULSE_LOOK} Locked tripod SHORT energetic SMOOTH push-in then hard settle, snappy luxury, no shake. ${NO_EXTRAS}`,
-      `${PULSE_LOOK} Locked tripod quick micro PUSH then SNAP settle, punchy social tempo, rock-steady. ${NO_EXTRAS}`,
-      `${PULSE_LOOK} Locked slider crisp FORWARD RUSH, much faster than editorial, brief hold, no handheld. ${NO_EXTRAS}`,
+      `${PULSE_LOOK} ${SHOWREEL_SHOTS[3]}`,
+      `${PULSE_LOOK} ${SHOWREEL_SHOTS[1]}`,
+      `${PULSE_LOOK} ${SHOWREEL_SHOTS[2]}`,
     ],
     negative:
       "slow dreamy drift, glacial pace, handheld, wobble, morphing, invented objects, people, text, watermark, soft mushy focus, fade to black",
@@ -109,9 +149,9 @@ export const CINEMA_STYLES: Record<CinemaStyleId, CinemaStyle> = {
       "distance",
     ],
     motions: [
-      `${MARINA_LOOK} Locked floating FORWARD GLIDE at medium-confident speed, soft parallax, bright airy light, rock-steady. ${NO_EXTRAS}`,
-      `${MARINA_LOOK} Locked gentle LATERAL DRIFT with sunny lifestyle mood, smooth constant speed, no shake. ${NO_EXTRAS}`,
-      `${MARINA_LOOK} Locked floating reveal as if stepping into the space toward the view, high-key daylight, soft reflections. ${NO_EXTRAS}`,
+      `${MARINA_LOOK} ${SHOWREEL_SHOTS[0]}`,
+      `${MARINA_LOOK} ${SHOWREEL_SHOTS[1]}`,
+      `${MARINA_LOOK} ${SHOWREEL_SHOTS[4]}`,
     ],
     negative:
       "handheld shake, wobble, aggressive smash zoom, morphing furniture, invented objects, people, text, watermark, cartoon, dark muddy grade, warped walls, TikTok snap",
@@ -123,9 +163,9 @@ export const CINEMA_STYLES: Record<CinemaStyleId, CinemaStyle> = {
     fadeSeconds: 0.7,
     transitions: ["fadeblack", "fadeblack", "fadeblack", "fadeblack", "fadeblack"],
     motions: [
-      `${NOIR_LOOK} Locked tripod NEARLY STATIC then ultra-micro PUSH-IN, rock-steady, prestige stillness. ${NO_EXTRAS}`,
-      `${NOIR_LOOK} Locked almost-still frame with tiny LATERAL micro-drift, heavy shadow mood, no shake. ${NO_EXTRAS}`,
-      `${NOIR_LOOK} Locked glacial crawl FORWARD with minimal parallax then long hold, dramatic restraint. ${NO_EXTRAS}`,
+      `${NOIR_LOOK} ${SHOWREEL_SHOTS[3]}`,
+      `${NOIR_LOOK} ${SHOWREEL_SHOTS[4]}`,
+      `${NOIR_LOOK} ${SHOWREEL_SHOTS[2]}`,
     ],
     negative:
       "fast motion, whip pan, handheld, wobble, bright overexposed look, morphing, invented objects, people, text, watermark, cartoon, sunny high-key, snappy energy",
@@ -143,9 +183,9 @@ export const CINEMA_STYLES: Record<CinemaStyleId, CinemaStyle> = {
       "wipeleft",
     ],
     motions: [
-      `${BOLD_LOOK} Locked assertive PUSH-IN toward a clear architectural DETAIL (molding, fixture, material), then hard settle. ${NO_EXTRAS}`,
-      `${BOLD_LOOK} Locked fast-but-smooth FORWARD RUSH at constant speed, impactful reveal, no shake. ${NO_EXTRAS}`,
-      `${BOLD_LOOK} Locked punchy micro ZOOM into texture or furniture focal point, snappy settle, rock-steady. ${NO_EXTRAS}`,
+      `${BOLD_LOOK} ${SHOWREEL_SHOTS[3]}`,
+      `${BOLD_LOOK} ${SHOWREEL_SHOTS[2]}`,
+      `${BOLD_LOOK} ${SHOWREEL_SHOTS[1]}`,
     ],
     negative:
       "slow dreamy drift, soft mushy look, handheld, wobble, morphing, invented objects, people, text, watermark, gentle pan, romantic amber",
@@ -163,9 +203,9 @@ export const CINEMA_STYLES: Record<CinemaStyleId, CinemaStyle> = {
       "fadewhite",
     ],
     motions: [
-      `${WARM_LOOK} Locked confident FORWARD PUSH-IN in golden light toward the room’s warmest focal point, soft prestige. ${NO_EXTRAS}`,
-      `${WARM_LOOK} Locked wide gentle LATERAL PAN across the FULL room width, soft constant speed, amber prestige. ${NO_EXTRAS}`,
-      `${WARM_LOOK} Locked reveal glide as if entering the space at golden hour, romantic warm lifestyle cinema. ${NO_EXTRAS}`,
+      `${WARM_LOOK} ${SHOWREEL_SHOTS[0]}`,
+      `${WARM_LOOK} ${SHOWREEL_SHOTS[4]}`,
+      `${WARM_LOOK} ${SHOWREEL_SHOTS[3]}`,
     ],
     negative:
       "harsh cold blue grade, aggressive smash zoom, handheld, wobble, morphing, invented objects, people, text, watermark, cartoon, TikTok snap, circle wipe",
@@ -185,37 +225,62 @@ export function getCinemaStyle(templateId: string): CinemaStyle {
   return CINEMA_STYLES[id];
 }
 
+export function cinemaFadeSeconds(
+  templateId: string,
+  photoCount = 8,
+): number {
+  const base = getCinemaStyle(templateId).fadeSeconds;
+  const n = Math.max(1, Math.floor(photoCount));
+  if (n <= 5) return Math.max(base, 0.22);
+  if (n >= 10) return Math.min(base, 0.14);
+  return base;
+}
+
 export function cinemaMotionPrompt(
   templateId: string,
   clipIndex: number,
   photoCount = 8,
+  slotSec?: number,
 ): string {
   const style = getCinemaStyle(templateId);
-  const motion = style.motions[clipIndex % style.motions.length];
-  // Peu de photos = plans longs (~3 s) : accélérer l’énergie caméra
-  // Beaucoup de photos = plans courts : rester contrôlé pour éviter le smear
-  const n = Math.max(1, Math.floor(photoCount));
-  const tempo =
-    n <= 5
-      ? "Tempo: FEW shots — make this clip MORE DYNAMIC: faster confident push / glide, punchy prestige energy, clear parallax, settle briefly at the end. Still tack-sharp, no smear."
-      : n <= 8
-        ? "Tempo: medium shot count — assertive but controlled camera energy."
-        : "Tempo: many short shots — keep moves compact and controlled, no smear.";
-  return `${VEO_FIDELITY_PROMPT} ${tempo} Camera: ${motion}`;
+  const shot = showreelShot(clipIndex, photoCount);
+  return [
+    VEO_FIDELITY_PROMPT,
+    SHOWREEL_LOOK,
+    styleMood(style.id),
+    showreelTempo(photoCount, slotSec),
+    `Camera: ${shot}`,
+    NO_EXTRAS,
+  ].join(" ");
 }
 
-/** Transitions plus sèches quand peu de plans (évite le côté “mou”). */
+/** Peu de photos / plans longs → fondus cinéma. Beaucoup de photos → coupes plus nettes. */
 export function cinemaTransitions(
   templateId: string,
   junctionCount: number,
   photoCount = 8,
 ): string[] {
   const style = getCinemaStyle(templateId);
-  const snappy =
-    photoCount <= 5
-      ? (["distance", "radial", "smoothleft", "distance", "smoothright"] as const)
-      : null;
-  const pool = snappy ?? style.transitions;
+  const cinematic = [
+    "distance",
+    "fadeblack",
+    "smoothleft",
+    "distance",
+    "smoothright",
+  ] as const;
+  const snappy = [
+    "radial",
+    "smoothleft",
+    "distance",
+    "smoothright",
+    "radial",
+  ] as const;
+  const pool =
+    photoCount <= 6
+      ? cinematic
+      : photoCount >= 10
+        ? snappy
+        : style.transitions;
   const out: string[] = [];
   for (let i = 0; i < junctionCount; i++) {
     out.push(pool[i % pool.length]);
@@ -225,7 +290,7 @@ export function cinemaTransitions(
 
 export function cinemaNegative(templateId: string): string {
   const styleNeg = getCinemaStyle(templateId).negative;
-  return `${styleNeg}, invented furniture, morphing, camera shake, handheld, people, text, watermark`;
+  return `${styleNeg}, invented furniture, morphing, camera shake, handheld, people, text, watermark, dutch angle, smash zoom`;
 }
 
 export const CINEMA_FADE_SECONDS = 0.38;

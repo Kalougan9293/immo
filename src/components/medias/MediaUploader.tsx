@@ -25,8 +25,8 @@ import {
 import { RenderWaitingOverlay } from "@/components/medias/RenderWaitingOverlay";
 import { useT } from "@/components/i18n/I18nProvider";
 
-const ACCEPT =
-  "image/*,.heic,.heif,.webp,.avif,.jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff";
+/** image/* seul : iOS/Windows vident la sélection si on mélange MIME + .jpg/.heic */
+const ACCEPT = "image/*";
 
 type MediaItem = {
   id: string;
@@ -103,7 +103,7 @@ export function MediaUploader({
   const selectionError = validateMediaSelection(items);
   const canContinue = !selectionError;
 
-  const addFiles = useCallback(async (fileList: FileList | File[]) => {
+  const addFiles = useCallback((fileList: FileList | File[]) => {
     const files = Array.from(fileList);
     if (!files.length) return;
 
@@ -150,6 +150,16 @@ export function MediaUploader({
     setError(messages.length ? messages[0] : null);
   }, [items]);
 
+  const ingestInput = (input: HTMLInputElement) => {
+    const picked = input.files ? Array.from(input.files) : [];
+    input.value = "";
+    if (!picked.length) {
+      setError("Aucune photo reçue. Choisis des JPG ou PNG et valide.");
+      return;
+    }
+    addFiles(picked);
+  };
+
   const removeItem = (id: string) => {
     setItems((prev) => {
       const target = prev.find((i) => i.id === id);
@@ -181,11 +191,6 @@ export function MediaUploader({
     e.preventDefault();
     const from = Number(e.dataTransfer.getData("text/plain"));
     if (Number.isFinite(from)) moveItem(from, toIndex);
-  };
-
-  const openPicker = () => {
-    if (atLimit || working) return;
-    inputRef.current?.click();
   };
 
   const handleContinue = async () => {
@@ -298,7 +303,9 @@ export function MediaUploader({
       e.preventDefault();
       setDragging(false);
       if (atLimit || working) return;
-      if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
+      if (e.dataTransfer.files?.length) {
+        addFiles(Array.from(e.dataTransfer.files));
+      }
     },
   };
 
@@ -313,10 +320,7 @@ export function MediaUploader({
   return (
     <div className="relative flex flex-1 flex-col pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
       <div className="animate-fade-up px-5 pt-1 text-center sm:px-8">
-        <p className="text-[11px] font-medium tracking-[0.2em] text-muted uppercase">
-          {t.media.step}
-        </p>
-        <h2 className="mt-1.5 font-display text-3xl font-medium tracking-tight text-pearl sm:text-4xl">
+        <h2 className="font-display text-3xl font-medium tracking-tight text-pearl sm:text-4xl">
           {t.media.title}
         </h2>
         <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted">
@@ -325,53 +329,49 @@ export function MediaUploader({
       </div>
 
       <div className="animate-fade-up animate-delay-1 mx-auto mt-6 flex w-full max-w-lg flex-1 flex-col px-5 sm:max-w-xl sm:px-8">
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPT}
-          multiple
-          className="hidden"
-          disabled={working || atLimit}
-          onChange={(e) => {
-            if (e.target.files) void addFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-
         {items.length === 0 ? (
-          <button
-            type="button"
-            onClick={openPicker}
-            disabled={working}
-            {...dropHandlers}
+          <div
             className={cn(
-              "relative flex min-h-[52vh] w-full flex-col items-center justify-center rounded-[1.5rem] border border-dashed transition-all duration-300 outline-none disabled:opacity-60",
+              "relative flex min-h-[52vh] w-full flex-col items-center justify-center rounded-[1.5rem] border border-dashed transition-all duration-300",
               dragging
                 ? "border-gold/70 bg-gold-soft shadow-[0_0_40px_rgba(196,165,116,0.2)]"
-                : "border-border-strong bg-surface/80 hover:border-gold/40 hover:bg-surface-elevated",
+                : "border-border-strong bg-surface/80",
             )}
+            {...dropHandlers}
           >
-            <div
-              className={cn(
-                "flex size-20 items-center justify-center rounded-2xl border transition-colors",
-                dragging
-                  ? "border-gold/50 bg-gold/20 text-gold"
-                  : "border-white/12 bg-white/[0.04] text-pearl",
-              )}
-            >
-              <Plus className="size-10" strokeWidth={1.5} />
+            <input
+              ref={inputRef}
+              type="file"
+              accept={ACCEPT}
+              multiple
+              disabled={working || atLimit}
+              onChange={(e) => ingestInput(e.currentTarget)}
+              className="absolute inset-0 z-10 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+              aria-label={t.media.browse}
+            />
+            <div className="pointer-events-none flex flex-col items-center">
+              <div
+                className={cn(
+                  "flex size-20 items-center justify-center rounded-2xl border transition-colors",
+                  dragging
+                    ? "border-gold/50 bg-gold/20 text-gold"
+                    : "border-white/12 bg-white/[0.04] text-pearl",
+                )}
+              >
+                <Plus className="size-10" strokeWidth={1.5} />
+              </div>
+              <p className="mt-5 text-[19px] font-medium tracking-wide text-pearl sm:text-[21px]">
+                {t.media.dropTitle}
+              </p>
+              <p className="mt-2 max-w-[240px] text-center text-[12px] leading-relaxed text-muted">
+                {t.media.dropHint}
+              </p>
+              <span className="mt-6 inline-flex items-center gap-2 text-[13px] tracking-[0.14em] text-muted-strong uppercase sm:text-[14px]">
+                <ImagePlus className="size-5" strokeWidth={1.75} />
+                {t.media.browse}
+              </span>
             </div>
-            <p className="mt-5 text-[19px] font-medium tracking-wide text-pearl sm:text-[21px]">
-              {t.media.dropTitle}
-            </p>
-            <p className="mt-2 max-w-[220px] text-center text-[12px] leading-relaxed text-muted">
-              {t.media.dropHint}
-            </p>
-            <span className="mt-6 inline-flex items-center gap-2 text-[13px] tracking-[0.14em] text-muted-strong uppercase sm:text-[14px]">
-              <ImagePlus className="size-5" strokeWidth={1.75} />
-              {t.media.browse}
-            </span>
-          </button>
+          </div>
         ) : (
           <div {...dropHandlers}>
             <p className="mb-3 text-[12px] tracking-wide text-muted">
@@ -385,30 +385,35 @@ export function MediaUploader({
               {t.media.coverHint}
             </p>
             <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              <li>
-                <button
-                  type="button"
+              <li className="relative">
+                <input
+                  type="file"
+                  accept={ACCEPT}
+                  multiple
                   disabled={working || atLimit}
-                  onClick={openPicker}
-                  className={cn(
-                    "flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed transition-colors",
-                    atLimit
-                      ? "cursor-not-allowed border-border text-muted opacity-50"
-                      : dragging
-                        ? "border-gold/60 bg-gold-soft text-gold"
-                        : "border-border-strong text-muted-strong hover:border-gold/40 hover:text-pearl",
-                  )}
+                  onChange={(e) => ingestInput(e.currentTarget)}
+                  className="absolute inset-0 z-10 cursor-pointer opacity-0 disabled:cursor-not-allowed"
                   aria-label={
                     atLimit
                       ? `Limite atteinte (${MAX_PHOTOS_PER_REEL} photos max)`
                       : "Ajouter encore"
                   }
+                />
+                <div
+                  className={cn(
+                    "flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed",
+                    atLimit
+                      ? "border-border text-muted opacity-50"
+                      : dragging
+                        ? "border-gold/60 bg-gold-soft text-gold"
+                        : "border-border-strong text-muted-strong",
+                  )}
                 >
                   <Plus className="size-6" strokeWidth={1.5} />
                   <span className="text-[10px] tracking-wide uppercase">
                     {atLimit ? "Max" : "Ajouter"}
                   </span>
-                </button>
+                </div>
               </li>
 
               {items.map((item, index) => {
@@ -508,7 +513,7 @@ export function MediaUploader({
             showArrow={!working}
             onClick={() => void handleContinue()}
           >
-            {flow === "dynamic" ? "Continuer" : t.media.continueEdit}
+            {t.media.continueEdit}
           </Button>
         </div>
       </div>

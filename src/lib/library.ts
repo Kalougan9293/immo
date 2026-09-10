@@ -11,7 +11,9 @@ export type LibraryVideo = {
   hasSources: boolean;
 };
 
-export async function getUserLibraryVideos(): Promise<LibraryVideo[]> {
+export async function getUserLibraryVideos(
+  limit = 15,
+): Promise<LibraryVideo[]> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -26,7 +28,7 @@ export async function getUserLibraryVideos(): Promise<LibraryVideo[]> {
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(3);
+    .limit(Math.max(1, Math.min(15, Math.floor(limit))));
 
   if (error || !data) return [];
 

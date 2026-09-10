@@ -19,14 +19,15 @@ import {
 import { getRecipe, type RenderRecipe } from "./recipes";
 import { MAX_MEDIAS_PER_VIDEO, MAX_USER_VIDEO_SEC } from "@/lib/media-limits";
 import {
-  MAX_VEO_PHOTOS_PER_REEL,
-  TARGET_REEL_SECONDS,
+  MAX_REEL_SECONDS,
   targetReelSecondsForCount,
+  veoPhotoBudget,
 } from "@/lib/product";
 import {
   computeEqualClipDurations,
   veoApiDurationForSlot,
   veoApiSeconds,
+  veoTrimStartSec,
 } from "@/lib/render/reel-timing";
 import {
   downloadVeoVideoToFile,
@@ -36,6 +37,7 @@ import { uploadLocalImageToFal } from "@/lib/ai/fal";
 import { veoClipCacheKey } from "@/lib/ai/veo-cache";
 import {
   buildCinemaTextLayers,
+  cinemaFadeSeconds,
   cinemaMotionPrompt,
   cinemaNegative,
   cinemaTransitions,
@@ -251,7 +253,7 @@ async function imageToClip(
   index: number,
   durationSec: number,
 ): Promise<number> {
-  const duration = Math.max(0.9, Math.min(TARGET_REEL_SECONDS + 0.5, durationSec));
+  const duration = Math.max(0.9, Math.min(MAX_REEL_SECONDS + 0.5, durationSec));
   await runFfmpeg([
     "-y",
     "-loop",
@@ -374,7 +376,7 @@ async function stretchVideoToClip(
   targetSec: number,
 ): Promise<number> {
   const src = Math.max(0.5, sourceSec);
-  const target = Math.max(src, Math.min(TARGET_REEL_SECONDS + 0.5, targetSec));
+  const target = Math.max(src, Math.min(MAX_REEL_SECONDS + 0.5, targetSec));
   const factor = target / src;
   const vf =
     `setpts=${factor.toFixed(4)}*PTS,` +
@@ -953,7 +955,7 @@ export async function buildSlideshowMp4(
 }
 
 /**
- * Photos → Veo 3.1 Lite → xfade. Fichiers sur disque (pas de Buffer) pour Render 512 Mo.
+ * Photos → Veo 3.1 Fast → xfade. Fichiers sur disque (pas de Buffer) pour Render 512 Mo.
  */
 export type VeoReelBuildResult = {
   finalPath: string;
@@ -982,9 +984,13 @@ export async function buildVeoReelMp4(
   const listing = property ? normalizeProperty(property) : null;
   const cinema = getCinemaStyle(templateId);
   const base = getRecipe(templateId);
+  const limited = (
+    base.singleShot ? medias.slice(0, 1) : medias
+  ).slice(0, MAX_MEDIAS_PER_VIDEO);
+  const fadeSeconds = cinemaFadeSeconds(templateId, limited.length);
   const recipe: RenderRecipe = {
     ...base,
-    fadeSeconds: cinema.fadeSeconds,
+    fadeSeconds,
     transition: edits?.transition || cinema.transitions[0] || "fadeblack",
     tripleStrip: false,
     grade: cinema.grade,
@@ -993,10 +999,6 @@ export async function buildVeoReelMp4(
   const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "areo-veo-"));
 
   try {
-    const limited = (
-      base.singleShot ? medias.slice(0, 1) : medias
-    ).slice(0, MAX_MEDIAS_PER_VIDEO);
-
     const reelTarget = targetReelSecondsForCount(
       limited.length,
       recipe.fadeSeconds,
@@ -1007,18 +1009,17 @@ export async function buildVeoReelMp4(
       reelTarget,
     );
 
-    // Photos Veo en parallèle (plafond coût), reste = Ken Burns
-    let veoBudget = MAX_VEO_PHOTOS_PER_REEL;
+    // Toutes les photos → Veo Fast. Pas de repli Ken Burns.
+    const veoBudgetTotal = veoPhotoBudget(limited.length);
+    console.log(
+      `[veo-reel] ${limited.length} photos — ${veoBudgetTotal} Veo Fast`,
+    );
     const plan = limited.map((media, i) => {
       const slot = slotDurations[i] ?? 2;
       if (media.kind === "video") {
         return { media, i, slot, engine: "video" as const };
       }
-      if (veoBudget > 0) {
-        veoBudget -= 1;
-        return { media, i, slot, engine: "veo" as const };
-      }
-      return { media, i, slot, engine: "kenburns" as const };
+      return { media, i, slot, engine: "veo" as const };
     });
 
     let veoDone = 0;
@@ -1040,22 +1041,8 @@ export async function buildVeoReelMp4(
               clipPath,
               recipe,
               overrideDuration ??
-                Math.min(slot, MAX_USER_VIDEO_SEC, TARGET_REEL_SECONDS),
+                Math.min(slot, MAX_USER_VIDEO_SEC, MAX_REEL_SECONDS),
               trimStart,
-            );
-            return { path: clipPath, duration };
-          }
-
-          if (engine === "kenburns") {
-            console.log(
-              `[veo-reel] clip ${i + 1}/${limited.length} — Ken Burns (${slot.toFixed(1)}s)…`,
-            );
-            const duration = await imageToClip(
-              media.localPath,
-              clipPath,
-              recipe,
-              i,
-              edits?.clipDurations?.[i] ?? slot,
             );
             return { path: clipPath, duration };
           }
@@ -1086,12 +1073,17 @@ export async function buildVeoReelMp4(
             );
           } else {
             console.log(
-              `[veo-reel] clip ${i + 1}/${limited.length} — Veo Lite ${apiDur} → ${slot.toFixed(1)}s…`,
+              `[veo-reel] clip ${i + 1}/${limited.length} — Veo Fast ${apiDur} → ${slot.toFixed(1)}s…`,
             );
             const imageUrl = await uploadLocalImageToFal(media.localPath);
             const { videoUrl, requestId } = await generateVeoClipFromImage({
               imageUrl,
-              prompt: cinemaMotionPrompt(templateId, i, limited.length),
+              prompt: cinemaMotionPrompt(
+                templateId,
+                i,
+                limited.length,
+                slot,
+              ),
               negativePrompt: cinemaNegative(templateId),
               duration: apiDur,
             });
@@ -1119,7 +1111,7 @@ export async function buildVeoReelMp4(
                   clipPath,
                   recipe,
                   Math.min(targetSec, apiSec),
-                  0,
+                  veoTrimStartSec(apiSec, Math.min(targetSec, apiSec)),
                 );
           return { path: clipPath, duration };
         } finally {
