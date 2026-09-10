@@ -33,6 +33,7 @@ import {
   generateVeoClipFromImage,
 } from "@/lib/ai/veo";
 import { uploadLocalImageToFal } from "@/lib/ai/fal";
+import { veoClipCacheKey } from "@/lib/ai/veo-cache";
 import {
   buildCinemaTextLayers,
   cinemaMotionPrompt,
@@ -788,6 +789,13 @@ async function concatWithXfade(
 export type LocalMediaInput = {
   localPath: string;
   kind: "image" | "video" | "other";
+  /** Chemin bucket (cache Veo — évite de re-payer Fal après un crash). */
+  sourcePath?: string;
+};
+
+export type VeoClipCache = {
+  get: (key: string, destPath: string) => Promise<boolean>;
+  put: (key: string, localPath: string) => Promise<void>;
 };
 
 export async function buildSlideshowMp4(
@@ -965,6 +973,7 @@ export async function buildVeoReelMp4(
     current: number;
     total: number;
   }) => void,
+  clipCache?: VeoClipCache,
 ): Promise<VeoReelBuildResult> {
   if (!medias.length) {
     throw new Error("Aucun média à monter.");
@@ -1053,23 +1062,47 @@ export async function buildVeoReelMp4(
 
           const apiDur = veoApiDurationForSlot(slot);
           const apiSec = veoApiSeconds(apiDur);
-          console.log(
-            `[veo-reel] clip ${i + 1}/${limited.length} — Veo Lite ${apiDur} → ${slot.toFixed(1)}s…`,
-          );
-          const imageUrl = await uploadLocalImageToFal(media.localPath);
-          const { videoUrl, requestId } = await generateVeoClipFromImage({
-            imageUrl,
-            prompt: cinemaMotionPrompt(templateId, i, limited.length),
-            negativePrompt: cinemaNegative(templateId),
-            duration: apiDur,
-          });
-          console.log(`[veo-reel] requestId ${requestId}`);
-
           const rawPath = path.join(
             workDir,
             `veo-raw-${String(i).padStart(3, "0")}.mp4`,
           );
-          await downloadVeoVideoToFile(videoUrl, rawPath);
+          const cacheKey =
+            media.sourcePath && clipCache
+              ? veoClipCacheKey({
+                  sourcePath: media.sourcePath,
+                  templateId,
+                  index: i,
+                  count: limited.length,
+                  duration: apiDur,
+                })
+              : null;
+          let cached = false;
+          if (cacheKey && clipCache) {
+            cached = await clipCache.get(cacheKey, rawPath);
+          }
+          if (cached) {
+            console.log(
+              `[veo-reel] clip ${i + 1}/${limited.length} — cache (0 crédit Fal)`,
+            );
+          } else {
+            console.log(
+              `[veo-reel] clip ${i + 1}/${limited.length} — Veo Lite ${apiDur} → ${slot.toFixed(1)}s…`,
+            );
+            const imageUrl = await uploadLocalImageToFal(media.localPath);
+            const { videoUrl, requestId } = await generateVeoClipFromImage({
+              imageUrl,
+              prompt: cinemaMotionPrompt(templateId, i, limited.length),
+              negativePrompt: cinemaNegative(templateId),
+              duration: apiDur,
+            });
+            console.log(`[veo-reel] requestId ${requestId}`);
+            await downloadVeoVideoToFile(videoUrl, rawPath);
+            if (cacheKey && clipCache) {
+              await clipCache.put(cacheKey, rawPath).catch((err: unknown) => {
+                console.error("[veo-cache] put", err);
+              });
+            }
+          }
 
           const targetSec = edits?.clipDurations?.[i] ?? slot;
           const duration =

@@ -24,6 +24,7 @@ import {
 import { engineForTemplate } from "@/lib/render/engine";
 import { normalizeProperty } from "@/lib/dynamic/property";
 import { hasFalCredentials } from "@/lib/ai/fal";
+import { readVeoClipCache, writeVeoClipCache } from "@/lib/ai/veo-cache";
 import {
   createRenderJob,
   failRenderJob,
@@ -236,7 +237,11 @@ async function executeRenderJob(input: {
   } = input;
 
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "areo-dl-"));
-  const localMedias: { localPath: string; kind: MediaPayload["kind"] }[] = [];
+  const localMedias: {
+    localPath: string;
+    kind: MediaPayload["kind"];
+    sourcePath: string;
+  }[] = [];
   let veoCleanup: (() => Promise<void>) | null = null;
 
   try {
@@ -261,8 +266,12 @@ async function executeRenderJob(input: {
         tmpRoot,
         `src-${String(i).padStart(3, "0")}${ext}`,
       );
-      await fs.writeFile(localPath, Buffer.from(await data.arrayBuffer()));
-      localMedias.push({ localPath, kind: media.kind });
+        await fs.writeFile(localPath, Buffer.from(await data.arrayBuffer()));
+        localMedias.push({
+          localPath,
+          kind: media.kind,
+          sourcePath: media.path,
+        });
       patchRenderJob(jobId, {
         progress: 8 + Math.round(((i + 1) / medias.length) * 6),
         statusLabel: "Préparation",
@@ -299,6 +308,12 @@ async function executeRenderJob(input: {
               progress: 16 + Math.round(ratio * 70),
               statusLabel: "Plans cinéma",
             });
+          },
+          {
+            get: (key, destPath) =>
+              readVeoClipCache(supabase, medias[0].path, key, destPath),
+            put: (key, localPath) =>
+              writeVeoClipCache(supabase, medias[0].path, key, localPath),
           },
         );
         veoCleanup = built.cleanup;
