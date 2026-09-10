@@ -23,6 +23,7 @@ import {
 } from "@/lib/media-limits";
 import { engineForTemplate } from "@/lib/render/engine";
 import { normalizeProperty } from "@/lib/dynamic/property";
+import { hasFalCredentials } from "@/lib/ai/fal";
 
 export const runtime = "nodejs";
 /** Veo Lite : marge pour jusqu'a 12 photos en parallele. */
@@ -88,6 +89,16 @@ export async function POST(request: Request) {
     // DYNAMIC generate → Veo (photos) ; polish / CLASSIC → FFmpeg
     const engine =
       mode === "polish" ? "ffmpeg" : engineForTemplate(templateId);
+
+    if (engine === "veo-fast" && mode === "generate" && !hasFalCredentials()) {
+      return NextResponse.json(
+        {
+          error:
+            "Service de génération indisponible. FAL_KEY n’est pas visible sur le serveur Render (nom exact FAL_KEY, puis un nouveau deploy).",
+        },
+        { status: 503 },
+      );
+    }
 
     const supabase = await createClient();
     const {
