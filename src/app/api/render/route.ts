@@ -58,6 +58,22 @@ type Body = {
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
+async function uploadMp4FromDisk(
+  supabase: Supabase,
+  storagePath: string,
+  localPath: string,
+) {
+  const buf = await fs.readFile(localPath);
+  const { error } = await supabase.storage
+    .from(AREO_MEDIA_BUCKET)
+    .upload(storagePath, buf, {
+      contentType: "video/mp4",
+      upsert: false,
+      cacheControl: "3600",
+    });
+  if (error) throw new Error(error.message);
+}
+
 export async function GET(request: Request) {
   const jobId = new URL(request.url).searchParams.get("job")?.trim();
   if (!jobId) {
@@ -221,6 +237,7 @@ async function executeRenderJob(input: {
 
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "areo-dl-"));
   const localMedias: { localPath: string; kind: MediaPayload["kind"] }[] = [];
+  let veoCleanup: (() => Promise<void>) | null = null;
 
   try {
     patchRenderJob(jobId, { progress: 8, statusLabel: "Préparation" });
@@ -252,7 +269,8 @@ async function executeRenderJob(input: {
       });
     }
 
-    let mp4: Buffer;
+    let mp4Path: string | null = null;
+    let mp4Buffer: Buffer | null = null;
     let masterStoragePath: string | null = null;
     let masterSignedUrl: string | null = null;
     let textLayers: unknown[] = [];
@@ -262,66 +280,66 @@ async function executeRenderJob(input: {
     const stamp = Date.now();
 
     if (engine === "veo-fast" && mode === "generate") {
-      patchRenderJob(jobId, { progress: 16, statusLabel: "Plans cinéma" });
-      const built = await buildVeoReelMp4(
-        localMedias,
-        templateId,
-        edits,
-        property,
-        (info) => {
-          if (info.phase === "assemble") {
+        patchRenderJob(jobId, { progress: 16, statusLabel: "Plans cinéma" });
+        const built = await buildVeoReelMp4(
+          localMedias,
+          templateId,
+          edits,
+          property,
+          (info) => {
+            if (info.phase === "assemble") {
+              patchRenderJob(jobId, {
+                progress: 88,
+                statusLabel: "Assemblage",
+              });
+              return;
+            }
+            const ratio = info.total ? info.current / info.total : 0;
             patchRenderJob(jobId, {
-              progress: 88,
-              statusLabel: "Assemblage",
+              progress: 16 + Math.round(ratio * 70),
+              statusLabel: "Plans cinéma",
             });
-            return;
-          }
-          const ratio = info.total ? info.current / info.total : 0;
-          patchRenderJob(jobId, {
-            progress: 16 + Math.round(ratio * 70),
-            statusLabel: "Plans cinéma",
-          });
-        },
-      );
-      mp4 = built.final;
-      durationSec = built.durationSec;
-      textLayers = built.textLayers;
+          },
+        );
+        veoCleanup = built.cleanup;
+        durationSec = built.durationSec;
+        textLayers = built.textLayers;
+        mp4Path = built.finalPath;
 
-      patchRenderJob(jobId, { progress: 92, statusLabel: "Finalisation" });
-      const masterPath = `${folder}/${stamp}-areo-master.mp4`;
-      const { error: masterUpErr } = await supabase.storage
-        .from(AREO_MEDIA_BUCKET)
-        .upload(masterPath, built.master, {
-          contentType: "video/mp4",
-          upsert: false,
-          cacheControl: "3600",
-        });
-      if (masterUpErr) throw new Error(masterUpErr.message);
-      masterStoragePath = masterPath;
-      const { data: masterSigned, error: masterSignErr } =
-        await supabase.storage
-          .from(AREO_MEDIA_BUCKET)
-          .createSignedUrl(masterPath, 60 * 60);
-      if (masterSignErr || !masterSigned?.signedUrl) {
-        throw new Error(masterSignErr?.message || "Master URL impossible.");
+        patchRenderJob(jobId, { progress: 92, statusLabel: "Finalisation" });
+        const masterPath = `${folder}/${stamp}-areo-master.mp4`;
+        await uploadMp4FromDisk(supabase, masterPath, built.masterPath);
+        masterStoragePath = masterPath;
+        const { data: masterSigned, error: masterSignErr } =
+          await supabase.storage
+            .from(AREO_MEDIA_BUCKET)
+            .createSignedUrl(masterPath, 60 * 60);
+        if (masterSignErr || !masterSigned?.signedUrl) {
+          throw new Error(masterSignErr?.message || "Master URL impossible.");
+        }
+        masterSignedUrl = masterSigned.signedUrl;
+      } else {
+        patchRenderJob(jobId, { progress: 30, statusLabel: "Assemblage" });
+        mp4Buffer = await buildSlideshowMp4(localMedias, templateId, edits);
       }
-      masterSignedUrl = masterSigned.signedUrl;
-    } else {
-      patchRenderJob(jobId, { progress: 30, statusLabel: "Assemblage" });
-      mp4 = await buildSlideshowMp4(localMedias, templateId, edits);
-    }
 
-    const storagePath = `${folder}/${stamp}-areo.mp4`;
+      const storagePath = `${folder}/${stamp}-areo.mp4`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(AREO_MEDIA_BUCKET)
-      .upload(storagePath, mp4, {
-        contentType: "video/mp4",
-        upsert: false,
-        cacheControl: "3600",
-      });
-
-    if (uploadError) throw new Error(uploadError.message);
+      if (mp4Path) {
+        await uploadMp4FromDisk(supabase, storagePath, mp4Path);
+      } else if (mp4Buffer) {
+        const { error: uploadError } = await supabase.storage
+          .from(AREO_MEDIA_BUCKET)
+          .upload(storagePath, mp4Buffer, {
+            contentType: "video/mp4",
+            upsert: false,
+            cacheControl: "3600",
+          });
+        if (uploadError) throw new Error(uploadError.message);
+        mp4Buffer = null;
+      } else {
+        throw new Error("Fichier vidéo manquant.");
+      }
 
     const { data: signed, error: signError } = await supabase.storage
       .from(AREO_MEDIA_BUCKET)
@@ -478,6 +496,9 @@ async function executeRenderJob(input: {
     console.error("[render-job]", jobId, message);
     failRenderJob(jobId, message);
   } finally {
+    if (veoCleanup) {
+      await veoCleanup().catch(() => undefined);
+    }
     await fs.rm(tmpRoot, { recursive: true, force: true }).catch(() => undefined);
   }
 }

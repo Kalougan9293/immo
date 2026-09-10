@@ -76,15 +76,23 @@ export async function generateVeoClipFromImage(
   return { videoUrl, requestId: result.requestId };
 }
 
-/** Télécharge un MP4 Veo vers un chemin local. */
+/** Télécharge un MP4 Veo vers un chemin local (stream, pas tout en RAM). */
 export async function downloadVeoVideoToFile(
   videoUrl: string,
   destPath: string,
 ): Promise<void> {
-  const { writeFile } = await import("node:fs/promises");
+  const { createWriteStream } = await import("node:fs");
+  const { pipeline } = await import("node:stream/promises");
+  const { Readable } = await import("node:stream");
   const res = await fetch(videoUrl);
   if (!res.ok) {
     throw new Error(`Téléchargement Veo impossible (${res.status}).`);
   }
-  await writeFile(destPath, Buffer.from(await res.arrayBuffer()));
+  if (!res.body) {
+    throw new Error("Téléchargement Veo : corps vide.");
+  }
+  await pipeline(
+    Readable.fromWeb(res.body as import("node:stream/web").ReadableStream),
+    createWriteStream(destPath),
+  );
 }

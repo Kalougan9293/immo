@@ -133,7 +133,7 @@ async function main() {
   for (const job of jobs) {
     console.log(`\n→ ${job.id}`);
     console.time(job.id);
-    const { final } = await buildVeoReelMp4(
+    const { finalPath, cleanup } = await buildVeoReelMp4(
       medias,
       job.id,
       undefined,
@@ -142,9 +142,11 @@ async function main() {
     console.timeEnd(job.id);
 
     const dest = path.join(OUT, job.file);
-    await fs.writeFile(dest, final);
+    await fs.copyFile(finalPath, dest);
+    await cleanup();
+    const stat = await fs.stat(dest);
     console.log(
-      `  OK ${job.file} (${(final.length / 1024 / 1024).toFixed(2)} MB)`,
+      `  OK ${job.file} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`,
     );
 
     const coverPath = path.join(COVERS, job.cover);

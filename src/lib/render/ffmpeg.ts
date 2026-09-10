@@ -50,8 +50,8 @@ import {
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const FPS = 30;
-/** 2 Veo à la fois : Render (512 Mo) tient, le proxy ne meurt pas. */
-const VEO_CLIP_CONCURRENCY = 2;
+/** 1 Veo à la fois : l’instance Render 512 Mo ne tient pas 2 ffmpeg 1080p. */
+const VEO_CLIP_CONCURRENCY = 1;
 
 async function mapLimit<T, R>(
   items: T[],
@@ -84,11 +84,18 @@ function runFfmpeg(args: string[]): Promise<void> {
       return;
     }
 
-    const child = spawn(bin, args, { windowsHide: true });
+    const child = spawn(
+      bin,
+      ["-threads", "1", "-filter_complex_threads", "1", ...args],
+      {
+        windowsHide: true,
+        env: { ...process.env, OMP_NUM_THREADS: "1" },
+      },
+    );
     let stderr = "";
 
     child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
+      if (stderr.length < 8000) stderr += chunk.toString();
     });
 
     child.on("error", reject);
@@ -98,6 +105,18 @@ function runFfmpeg(args: string[]): Promise<void> {
     });
   });
 }
+
+const X264_OUT = [
+  "-c:v",
+  "libx264",
+  "-preset",
+  "veryfast",
+  "-crf",
+  "20",
+  "-pix_fmt",
+  "yuv420p",
+  "-an",
+] as const;
 
 /** Remplit le cadre 9:16 sans bandes noires (comme les Reels d'exemple). */
 function coverScale(): string {
@@ -730,48 +749,40 @@ async function concatWithXfade(
     ...clips.map((c) => Math.max(0.15, c.duration * 0.35)),
   );
 
-  const inputs: string[] = [];
-  for (const clip of clips) {
-    inputs.push("-i", clip.path);
-  }
+  const workDir = path.dirname(outputPath);
+  let currentPath = clips[0].path;
+  let currentDuration = clips[0].duration;
 
-  const filterParts: string[] = [];
-  let lastLabel = "0:v";
-  let timeline = clips[0].duration;
-
+  // 2 clips à la fois — un seul graphe xfade 12×1080p explose la RAM Render.
   for (let i = 1; i < clips.length; i++) {
-    const outLabel = i === clips.length - 1 ? "vout" : `v${i}`;
-    const offset = Math.max(0, timeline - fade);
+    const isLast = i === clips.length - 1;
+    const outPath = isLast
+      ? outputPath
+      : path.join(workDir, `xfade-${String(i).padStart(3, "0")}.mp4`);
+    const offset = Math.max(0, currentDuration - fade);
     const transition = Array.isArray(transitionOrList)
       ? transitionOrList[i - 1] || defaultTransition
       : defaultTransition;
-    filterParts.push(
-      `[${lastLabel}][${i}:v]xfade=transition=${transition}:duration=${fade}:offset=${offset}[${outLabel}]`,
-    );
-    lastLabel = outLabel;
-    timeline = offset + clips[i].duration;
-  }
 
-  await runFfmpeg([
-    "-y",
-    ...inputs,
-    "-filter_complex",
-    filterParts.join(";"),
-    "-map",
-    "[vout]",
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast",
-    "-crf",
-    "20",
-    "-pix_fmt",
-    "yuv420p",
-    "-movflags",
-    "+faststart",
-    "-an",
-    outputPath,
-  ]);
+    await runFfmpeg([
+      "-y",
+      "-i",
+      currentPath,
+      "-i",
+      clips[i].path,
+      "-filter_complex",
+      `[0:v][1:v]xfade=transition=${transition}:duration=${fade}:offset=${offset}[vout]`,
+      "-map",
+      "[vout]",
+      ...X264_OUT,
+      "-movflags",
+      "+faststart",
+      outPath,
+    ]);
+
+    currentDuration = offset + clips[i].duration;
+    currentPath = outPath;
+  }
 }
 
 export type LocalMediaInput = {
@@ -934,13 +945,14 @@ export async function buildSlideshowMp4(
 }
 
 /**
- * Photos → Veo 3.1 Fast (I2V, parallèle) → xfade → master sans texte + final textes.
+ * Photos → Veo 3.1 Lite → xfade. Fichiers sur disque (pas de Buffer) pour Render 512 Mo.
  */
 export type VeoReelBuildResult = {
-  final: Buffer;
-  master: Buffer;
+  finalPath: string;
+  masterPath: string;
   durationSec: number;
   textLayers: TextLayerEdit[];
+  cleanup: () => Promise<void>;
 };
 
 export async function buildVeoReelMp4(
@@ -1173,13 +1185,19 @@ export async function buildVeoReelMp4(
     }
 
     return {
-      final: await fs.readFile(finalPath),
-      master: await fs.readFile(masterPath),
+      finalPath,
+      masterPath,
       durationSec: totalApprox,
       textLayers: layers,
+      cleanup: async () => {
+        await fs
+          .rm(workDir, { recursive: true, force: true })
+          .catch(() => undefined);
+      },
     };
-  } finally {
+  } catch (e) {
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+    throw e;
   }
 }
 
