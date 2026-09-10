@@ -20,6 +20,7 @@ import {
   type RenderSession,
 } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/client";
+import { runRenderApi } from "@/lib/render/client";
 
 type DynamicEditClientProps = {
   templateId: string;
@@ -252,62 +253,42 @@ export function DynamicEditClient({ templateId }: DynamicEditClientProps) {
     }, 350);
 
     try {
-      const res = await fetch("/api/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId,
-          mode: "polish",
-          medias: clips.map((c) => ({
-            path: c.path,
-            name: c.name,
-            kind: c.kind,
-          })),
-          edits: {
-            clipDurations: clips.map((c) => c.duration),
-            clipTrimStarts: clips.map((c) => c.trimStart ?? 0),
-            transitions: transitions.slice(0, Math.max(0, clips.length - 1)),
-            textLayers: texts
-              .filter((t) => t.content.trim())
-              .map((t) => ({
-                content: t.content,
-                fontId: t.fontId,
-                start: t.start,
-                duration: t.duration,
-                x: t.x,
-                y: t.y,
-                scale: t.scale ?? 1,
-                color: t.color ?? "#F5F0E6",
-                stroke: t.stroke ?? "dark",
-                bg: t.bg ?? null,
-                bgAlpha: t.bgAlpha ?? 0,
-                ...(t.look ? { look: t.look } : {}),
-                ...(t.fadeSec != null ? { fadeSec: t.fadeSec } : {}),
-                enter: t.enter ?? "fade",
-                exit: t.exit ?? "fade",
-              })),
-            disableTripleStrip: true,
-          },
-          replaceVideoId: session.savedVideoId,
-          coverPath,
-        }),
+      const data = await runRenderApi({
+        templateId,
+        mode: "polish",
+        medias: clips.map((c) => ({
+          path: c.path,
+          name: c.name,
+          kind: c.kind,
+        })),
+        edits: {
+          clipDurations: clips.map((c) => c.duration),
+          clipTrimStarts: clips.map((c) => c.trimStart ?? 0),
+          transitions: transitions.slice(0, Math.max(0, clips.length - 1)),
+          textLayers: texts
+            .filter((t) => t.content.trim())
+            .map((t) => ({
+              content: t.content,
+              fontId: t.fontId,
+              start: t.start,
+              duration: t.duration,
+              x: t.x,
+              y: t.y,
+              scale: t.scale ?? 1,
+              color: t.color ?? "#F5F0E6",
+              stroke: t.stroke ?? "dark",
+              bg: t.bg ?? null,
+              bgAlpha: t.bgAlpha ?? 0,
+              ...(t.look ? { look: t.look } : {}),
+              ...(t.fadeSec != null ? { fadeSec: t.fadeSec } : {}),
+              enter: t.enter ?? "fade",
+              exit: t.exit ?? "fade",
+            })),
+          disableTripleStrip: true,
+        },
+        replaceVideoId: session.savedVideoId,
+        coverPath,
       });
-
-      const data = (await res.json()) as {
-        error?: string;
-        signedUrl?: string;
-        storagePath?: string;
-        coverUrl?: string | null;
-        coverPath?: string | null;
-        saved?: boolean;
-        savedVideoId?: string | null;
-        evicted?: number;
-      };
-
-      if (!res.ok) throw new Error(data.error || "Échec de l’export.");
-      if (!data.signedUrl || !data.storagePath) {
-        throw new Error("URL manquante.");
-      }
 
       const next: RenderSession = {
         ...session,

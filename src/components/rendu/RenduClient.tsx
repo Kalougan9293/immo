@@ -38,6 +38,7 @@ import {
   type TimelineTextLayer,
 } from "@/lib/render/edit-options";
 import { engineForTemplate } from "@/lib/render/engine";
+import { runRenderApi } from "@/lib/render/client";
 import {
   buildCinemaTextLayers,
   cinemaTransitions,
@@ -514,54 +515,35 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
         createdAt: new Date().toISOString(),
       });
 
-      const res = await fetch("/api/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId,
-          medias,
-          engine: engineForTemplate(templateId),
-          edits: {
-            clipDurations: clips.map((c) => c.duration),
-            clipTrimStarts: clips.map((c) => c.trimStart ?? 0),
-            transitions: transitions.slice(0, Math.max(0, clips.length - 1)),
-            textLayers: texts
-              .filter((t) => t.content.trim())
-              .map((t) => ({
-                content: t.content,
-                fontId: t.fontId,
-                start: t.start,
-                duration: t.duration,
-                x: t.x,
-                y: t.y,
-                scale: t.scale ?? 1,
-                color: t.color ?? "#FFFFFF",
-                stroke: t.stroke ?? "dark",
-                bg: t.bg ?? null,
-                bgAlpha: t.bgAlpha ?? 0,
-                enter: t.enter ?? "fade",
-                exit: t.exit ?? "fade",
-                ...(t.fadeSec != null ? { fadeSec: t.fadeSec } : {}),
-              })),
-          },
-          replaceVideoId: result?.savedVideoId ?? null,
-        }),
+      const data = await runRenderApi({
+        templateId,
+        medias,
+        engine: engineForTemplate(templateId),
+        edits: {
+          clipDurations: clips.map((c) => c.duration),
+          clipTrimStarts: clips.map((c) => c.trimStart ?? 0),
+          transitions: transitions.slice(0, Math.max(0, clips.length - 1)),
+          textLayers: texts
+            .filter((t) => t.content.trim())
+            .map((t) => ({
+              content: t.content,
+              fontId: t.fontId,
+              start: t.start,
+              duration: t.duration,
+              x: t.x,
+              y: t.y,
+              scale: t.scale ?? 1,
+              color: t.color ?? "#FFFFFF",
+              stroke: t.stroke ?? "dark",
+              bg: t.bg ?? null,
+              bgAlpha: t.bgAlpha ?? 0,
+              enter: t.enter ?? "fade",
+              exit: t.exit ?? "fade",
+              ...(t.fadeSec != null ? { fadeSec: t.fadeSec } : {}),
+            })),
+        },
+        replaceVideoId: result?.savedVideoId ?? null,
       });
-
-      const data = (await res.json()) as {
-        error?: string;
-        signedUrl?: string;
-        storagePath?: string;
-        coverUrl?: string | null;
-        coverPath?: string | null;
-        saved?: boolean;
-        savedVideoId?: string | null;
-        evicted?: number;
-      };
-
-      if (!res.ok) {
-        throw new Error(data.error || "Échec de l’export.");
-      }
 
       setWaitStatus("Assemblage du Reel…");
       setWaitProgress(92);
@@ -573,7 +555,7 @@ export function RenduClient({ templateId, templateTitle }: RenduClientProps) {
       const evicted = data.evicted ?? 0;
 
       if (!signedUrl || !storagePath) {
-        throw new Error(data.error || "Échec de l’export.");
+        throw new Error("Échec de l’export.");
       }
 
       if (tick) {

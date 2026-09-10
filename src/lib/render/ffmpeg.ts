@@ -50,6 +50,29 @@ import {
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const FPS = 30;
+/** 2 Veo à la fois : Render (512 Mo) tient, le proxy ne meurt pas. */
+const VEO_CLIP_CONCURRENCY = 2;
+
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const n = Math.min(Math.max(1, limit), Math.max(items.length, 1));
+  if (!items.length) return results;
+  await Promise.all(
+    Array.from({ length: n }, async () => {
+      while (true) {
+        const index = next++;
+        if (index >= items.length) return;
+        results[index] = await fn(items[index], index);
+      }
+    }),
+  );
+  return results;
+}
 
 function runFfmpeg(args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -925,6 +948,11 @@ export async function buildVeoReelMp4(
   templateId = "appartement-premium",
   edits?: RenderEditOptions,
   property?: PropertyListing | null,
+  onProgress?: (info: {
+    phase: "veo" | "assemble";
+    current: number;
+    total: number;
+  }) => void,
 ): Promise<VeoReelBuildResult> {
   if (!medias.length) {
     throw new Error("Aucun média à monter.");
@@ -972,81 +1000,95 @@ export async function buildVeoReelMp4(
       return { media, i, slot, engine: "kenburns" as const };
     });
 
-    const clips = await Promise.all(
-      plan.map(async ({ media, i, slot, engine }) => {
-        const clipPath = path.join(
-          workDir,
-          `clip-${String(i).padStart(3, "0")}.mp4`,
-        );
-
-        if (engine === "video") {
-          const overrideDuration = edits?.clipDurations?.[i];
-          const trimStart = edits?.clipTrimStarts?.[i] ?? 0;
-          const duration = await videoToClip(
-            media.localPath,
-            clipPath,
-            recipe,
-            overrideDuration ??
-              Math.min(slot, MAX_USER_VIDEO_SEC, TARGET_REEL_SECONDS),
-            trimStart,
+    let veoDone = 0;
+    const clips = await mapLimit(
+      plan,
+      VEO_CLIP_CONCURRENCY,
+      async ({ media, i, slot, engine }) => {
+        try {
+          const clipPath = path.join(
+            workDir,
+            `clip-${String(i).padStart(3, "0")}.mp4`,
           );
-          return { path: clipPath, duration };
-        }
 
-        if (engine === "kenburns") {
+          if (engine === "video") {
+            const overrideDuration = edits?.clipDurations?.[i];
+            const trimStart = edits?.clipTrimStarts?.[i] ?? 0;
+            const duration = await videoToClip(
+              media.localPath,
+              clipPath,
+              recipe,
+              overrideDuration ??
+                Math.min(slot, MAX_USER_VIDEO_SEC, TARGET_REEL_SECONDS),
+              trimStart,
+            );
+            return { path: clipPath, duration };
+          }
+
+          if (engine === "kenburns") {
+            console.log(
+              `[veo-reel] clip ${i + 1}/${limited.length} — Ken Burns (${slot.toFixed(1)}s)…`,
+            );
+            const duration = await imageToClip(
+              media.localPath,
+              clipPath,
+              recipe,
+              i,
+              edits?.clipDurations?.[i] ?? slot,
+            );
+            return { path: clipPath, duration };
+          }
+
+          const apiDur = veoApiDurationForSlot(slot);
+          const apiSec = veoApiSeconds(apiDur);
           console.log(
-            `[veo-reel] clip ${i + 1}/${limited.length} — Ken Burns (${slot.toFixed(1)}s)…`,
+            `[veo-reel] clip ${i + 1}/${limited.length} — Veo Lite ${apiDur} → ${slot.toFixed(1)}s…`,
           );
-          const duration = await imageToClip(
-            media.localPath,
-            clipPath,
-            recipe,
-            i,
-            edits?.clipDurations?.[i] ?? slot,
+          const imageUrl = await uploadLocalImageToFal(media.localPath);
+          const { videoUrl, requestId } = await generateVeoClipFromImage({
+            imageUrl,
+            prompt: cinemaMotionPrompt(templateId, i, limited.length),
+            negativePrompt: cinemaNegative(templateId),
+            duration: apiDur,
+          });
+          console.log(`[veo-reel] requestId ${requestId}`);
+
+          const rawPath = path.join(
+            workDir,
+            `veo-raw-${String(i).padStart(3, "0")}.mp4`,
           );
+          await downloadVeoVideoToFile(videoUrl, rawPath);
+
+          const targetSec = edits?.clipDurations?.[i] ?? slot;
+          const duration =
+            targetSec > apiSec + 0.2
+              ? await stretchVideoToClip(
+                  rawPath,
+                  clipPath,
+                  recipe,
+                  apiSec,
+                  targetSec,
+                )
+              : await videoToClip(
+                  rawPath,
+                  clipPath,
+                  recipe,
+                  Math.min(targetSec, apiSec),
+                  0,
+                );
           return { path: clipPath, duration };
+        } finally {
+          veoDone += 1;
+          onProgress?.({
+            phase: "veo",
+            current: veoDone,
+            total: plan.length,
+          });
         }
-
-        const apiDur = veoApiDurationForSlot(slot);
-        const apiSec = veoApiSeconds(apiDur);
-        console.log(
-          `[veo-reel] clip ${i + 1}/${limited.length} — Veo Fast ${apiDur} → ${slot.toFixed(1)}s…`,
-        );
-        const imageUrl = await uploadLocalImageToFal(media.localPath);
-        const { videoUrl, requestId } = await generateVeoClipFromImage({
-          imageUrl,
-          prompt: cinemaMotionPrompt(templateId, i, limited.length),
-          negativePrompt: cinemaNegative(templateId),
-          duration: apiDur,
-        });
-        console.log(`[veo-reel] requestId ${requestId}`);
-
-        const rawPath = path.join(
-          workDir,
-          `veo-raw-${String(i).padStart(3, "0")}.mp4`,
-        );
-        await downloadVeoVideoToFile(videoUrl, rawPath);
-
-        const targetSec = edits?.clipDurations?.[i] ?? slot;
-        const duration =
-          targetSec > apiSec + 0.2
-            ? await stretchVideoToClip(
-                rawPath,
-                clipPath,
-                recipe,
-                apiSec,
-                targetSec,
-              )
-            : await videoToClip(
-                rawPath,
-                clipPath,
-                recipe,
-                Math.min(targetSec, apiSec),
-                0,
-              );
-        return { path: clipPath, duration };
-      }),
+      },
     );
+
+    onProgress?.({ phase: "assemble", current: 1, total: 1 });
 
     const outputPath = path.join(workDir, "output.mp4");
     const transitionArg: string | string[] =

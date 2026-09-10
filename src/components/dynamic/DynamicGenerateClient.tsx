@@ -12,6 +12,7 @@ import {
   type RenderSession,
 } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/client";
+import { runRenderApi } from "@/lib/render/client";
 
 type DynamicGenerateClientProps = {
   templateId: string;
@@ -65,7 +66,9 @@ export function DynamicGenerateClient({
         // ~22 s / plan Veo 1080p + marge assemblage (estimation, pas un timer aléatoire)
         const estMs = 14_000 + photoCount * 22_000;
         const startedAt = Date.now();
+        let serverDriven = false;
         tick = setInterval(() => {
+          if (serverDriven) return;
           const ratio = (Date.now() - startedAt) / estMs;
           // Courbe douce → plafonne à 90 % jusqu’à la fin réelle
           const eased = 1 - Math.exp(-ratio * 1.35);
@@ -77,39 +80,22 @@ export function DynamicGenerateClient({
           else setStatus("Finalisation");
         }, 450);
 
-        const res = await fetch("/api/render", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const data = await runRenderApi(
+          {
             templateId,
             medias: upload.medias,
             property,
             coverPath: upload.coverPath ?? null,
             edits: writingStyleId ? { writingStyleId } : {},
-          }),
-        });
-
-        const data = (await res.json()) as {
-          error?: string;
-          signedUrl?: string;
-          storagePath?: string;
-          masterStoragePath?: string | null;
-          masterSignedUrl?: string | null;
-          textLayers?: unknown[];
-          durationSec?: number | null;
-          coverUrl?: string | null;
-          coverPath?: string | null;
-          saved?: boolean;
-          savedVideoId?: string | null;
-          evicted?: number;
-        };
-
-        if (!res.ok) {
-          throw new Error(data.error || "Échec de la génération.");
-        }
-        if (!data.signedUrl || !data.storagePath) {
-          throw new Error("URL vidéo manquante.");
-        }
+          },
+          ({ progress: p, statusLabel }) => {
+            serverDriven = true;
+            if (typeof p === "number") {
+              setProgress((cur) => Math.max(cur, Math.min(96, p)));
+            }
+            if (statusLabel) setStatus(statusLabel);
+          },
+        );
 
         if (tick) clearInterval(tick);
         setStatus("Finalisation");
